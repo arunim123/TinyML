@@ -1,0 +1,25 @@
+{
+  "project_name": "vibration_predictive_maintenance",
+  "version": "1.0.0",
+  "target_platform": "ESP32",
+  "sram_budget_kb": 200,
+  "model_architecture": {
+    "window_len": 100,
+    "conv1_in_channels": 1,
+    "conv1_out_channels": 8,
+    "conv1_kernel_size": 5,
+    "conv2_out_channels": 16,
+    "conv2_kernel_size": 5,
+    "pool_stride": 2,
+    "latent_dim": 400,
+    "num_classes": 2,
+    "quantization_bits": 4
+  },
+  "adaptation_parameters": {
+    "replay_buffer_capacity": 50,
+    "batch_size": 8,
+    "learning_rate": 0.01,
+    "base_sparsity": 0.05,
+    "adaptation_mode": "last_layer_sparse"
+  }
+}
