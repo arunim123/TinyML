@@ -421,7 +421,7 @@ with row2_col2:
     
     config_h_content = "// Generated model_config.h\n#define SEQ_LEN 100\n#define LATENT_DIM 400\n#define BUFFER_CAPACITY 50"
     if os.path.exists("main/model_config.h"):
-        with open("main/model_config.h", "r") as f:
+        with open("main/model_config.h", "r", encoding="utf-8", errors="replace") as f:
             config_h_content = f.read()
             
     st.code(config_h_content, language="c")
