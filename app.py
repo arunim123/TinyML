@@ -1234,7 +1234,7 @@ with ws_overview:
                 <span class="terminal-dot dot-yellow"></span>
                 <span class="terminal-dot dot-green"></span>
             </div>
-            <div class="terminal-title">esp32-serial-uart0 --baud 115200</div>
+            <div class="terminal-title">idf.py -p /dev/ttyUSB0 -b 115200 monitor</div>
         </div>
         <div class="terminal-body" style="height: 300px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; line-height: 1.5; color: rgba(255, 255, 255, 0.85); background: #080c14; padding: 1rem; border-radius: 0 0 12px 12px;">
             <div id="terminal-content">
