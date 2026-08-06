@@ -1136,38 +1136,80 @@ with ws_overview:
             st.plotly_chart(fig_conf, key="plotly_confidence_vibrations", width='stretch')
 
     with row2_col2:
+        conn_info = {
+            "connected": False,
+            "board_name": "Unknown Device",
+            "chip_family": "Unavailable",
+            "port": "Unavailable",
+            "baudrate": "Unavailable",
+            "firmware_version": "Unavailable",
+            "build_version": "Unavailable",
+            "app_version": "Unavailable",
+            "sdk_version": "Unavailable",
+            "uptime": "Unavailable"
+        }
+        if 'serial_bridge' in st.session_state:
+            conn_info = st.session_state.serial_bridge.get_connection_info()
+
         st.markdown("""
-        <div style='font-size: 0.72rem; font-weight: 500; color: rgba(255, 255, 255, 0.3); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.75rem;'>Hardware Profiles</div>
+        <div style='font-size: 0.72rem; font-weight: 500; color: rgba(255, 255, 255, 0.3); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.75rem;'>Hardware Profile</div>
         """, unsafe_allow_html=True)
         
-        if serial_connected:
-            st.markdown("""
-            <div class="target-node">
-                <div class="target-node-header">
-                    <span class="target-node-title">ESP32 Core LX6</span>
-                    <span class="target-badge-online">LIVE</span>
-                </div>
-                <div class="target-node-meta">Task: Anomaly Classification Engine</div>
-                <div class="target-node-progress">
-                    <div class="target-progress-fill" style="width: 100%;"></div>
-                </div>
-                <div class="target-node-status">Status: Serial Synced</div>
+        status_badge = '<span class="target-badge-online">LIVE</span>' if conn_info["connected"] else '<span class="target-badge-offline" style="background: rgba(255, 92, 122, 0.08); border: 1px solid rgba(255, 92, 122, 0.2); color: #FF5C7A; font-size: 0.62rem; font-weight: 800; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.05em;">DISCONNECTED</span>'
+        status_text = "Serial Synced" if conn_info["connected"] else "Device Disconnected"
+        progress_width = "100%" if conn_info["connected"] else "0%"
+        progress_color = "" if conn_info["connected"] else "background: #FF5C7A;"
+        
+        st.markdown(f"""
+        <div class="target-node">
+            <div class="target-node-header">
+                <span class="target-node-title">{conn_info['board_name']}</span>
+                {status_badge}
             </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div class="target-node">
-                <div class="target-node-header">
-                    <span class="target-node-title">ESP32 Core LX6</span>
-                    <span class="target-badge-offline" style="background: rgba(255, 92, 122, 0.08); border: 1px solid rgba(255, 92, 122, 0.2); color: #FF5C7A; font-size: 0.62rem; font-weight: 800; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.05em;">DISCONNECTED</span>
-                </div>
-                <div class="target-node-meta">Task: Anomaly Classification Engine</div>
-                <div class="target-node-progress">
-                    <div class="target-progress-fill" style="width: 0%; background: #FF5C7A;"></div>
-                </div>
-                <div class="target-node-status" style="color: #FF5C7A;">Status: Device Disconnected</div>
+            <div class="target-node-meta">Task: Anomaly Classification Engine</div>
+            <div class="target-node-progress">
+                <div class="target-progress-fill" style="width: {progress_width}; {progress_color}"></div>
             </div>
-            """, unsafe_allow_html=True)
+            <div class="target-node-status">Status: {status_text}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown(f"""
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 8px; padding: 0.75rem; margin-top: 0.5rem; font-size: 0.75rem; line-height: 1.6;">
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">Chip Family:</span>
+                <strong style="color: #ffffff;">{conn_info['chip_family']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">Serial Port:</span>
+                <strong style="color: #00E5FF;">{conn_info['port']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">Baud Rate:</span>
+                <strong style="color: #ffffff;">{conn_info['baudrate']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">Firmware Version:</span>
+                <strong style="color: #00FF9D;">{conn_info['firmware_version']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">Build Version:</span>
+                <strong style="color: #ffffff;">{conn_info['build_version']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">App Version:</span>
+                <strong style="color: #ffffff;">{conn_info['app_version']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">SDK Version:</span>
+                <strong style="color: #ffffff;">{conn_info['sdk_version']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding-top: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">Runtime Uptime:</span>
+                <strong style="color: #FFC857;">{conn_info['uptime']}</strong>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
             
         st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
         
@@ -1195,11 +1237,63 @@ with ws_overview:
             st.button("🔴 Anomaly", key="main_anomaly_btn", on_click=handle_anomaly_injection)
 
     # Telemetry Log
-    def format_log_to_html(log_line):
+    def format_log_to_parsed_html(log_line):
         import html
         import re
-        escaped = html.escape(log_line)
-        tags_and_colors = {
+        import json
+        
+        match_ts = re.match(r'^(\[[0-9:\.]+\])\s+(.*)$', log_line)
+        if not match_ts:
+            return f'<div style="margin-bottom:0.75rem; border-left:2px solid rgba(255,255,255,0.1); padding-left:0.5rem; color:rgba(255,255,255,0.6); font-size:0.75rem;">{html.escape(log_line)}</div>'
+            
+        timestamp = match_ts.group(1)
+        payload = match_ts.group(2).strip()
+        
+        if payload.startswith("{") and payload.endswith("}"):
+            try:
+                data = json.loads(payload)
+                if data.get("type") == "telemetry":
+                    mag = data.get("mag", 0.0)
+                    pred = data.get("pred", 0)
+                    pred_name = "ANOMALOUS" if pred == 1 else "NORMAL"
+                    pred_color = "#FF5C7A" if pred == 1 else "#00FF9D"
+                    conf = data.get("conf", 0.0) * 100.0
+                    sram = data.get("static_ram_kb", 0.0)
+                    buf = data.get("buffer", 0)
+                    lat = data.get("latency_ms", 0.0)
+                    
+                    return f"""
+                    <div style="background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.04); border-radius: 8px; padding: 0.75rem; margin-bottom: 0.75rem; font-family: 'Outfit', sans-serif;">
+                        <div style="font-size:0.75rem; color:rgba(255,255,255,0.4); margin-bottom:0.4rem; font-family: 'JetBrains Mono', monospace;">{timestamp}</div>
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:0.5rem; font-size:0.78rem; line-height: 1.4;">
+                            <div>
+                                <span style="color:#00E5FF; font-weight:bold;">IMU</span><br>
+                                • Accel Magnitude: <strong style="color:#ffffff;">{mag:.3f} g</strong>
+                            </div>
+                            <div>
+                                <span style="color:#00FF9D; font-weight:bold;">TinyML</span><br>
+                                • Prediction: <strong style="color:{pred_color};">{pred_name}</strong><br>
+                                • Confidence: <strong style="color:#ffffff;">{conf:.1f}%</strong>
+                            </div>
+                            <div>
+                                <span style="color:#8B5CF6; font-weight:bold;">Memory</span><br>
+                                • Static SRAM: <strong style="color:#ffffff;">{sram:.1f} KB</strong>
+                            </div>
+                            <div>
+                                <span style="color:#FFC857; font-weight:bold;">Replay</span><br>
+                                • Buffer: <strong style="color:#ffffff;">{buf} / 50</strong>
+                            </div>
+                            <div>
+                                <span style="color:#FF79C6; font-weight:bold;">Performance</span><br>
+                                • Latency: <strong style="color:#ffffff;">{lat:.2f} ms</strong>
+                            </div>
+                        </div>
+                    </div>
+                    """
+            except Exception:
+                pass
+                
+        tag_colors = {
             "[TinyML]": "#00FF9D",
             "[IMU]": "#FF79C6",
             "[Memory]": "#8B5CF6",
@@ -1210,46 +1304,174 @@ with ws_overview:
             "[Replay]": "#8B5CF6",
             "[Info]": "#00FF9D",
         }
-        for tag, color in tags_and_colors.items():
+        styled_payload = html.escape(payload)
+        for tag, color in tag_colors.items():
+            if tag in styled_payload:
+                styled_payload = styled_payload.replace(tag, f'<span style="color: {color}; font-weight: bold;">{tag}</span>')
+                
+        return f'<div style="font-size:0.75rem; margin-bottom:0.4rem; color:rgba(255,255,255,0.7);"><span style="color: rgba(255, 255, 255, 0.45); font-family: \'JetBrains Mono\', monospace;">{timestamp}</span> {styled_payload}</div>'
+
+    def format_log_to_raw_html(log_line):
+        import html
+        import re
+        escaped = html.escape(log_line)
+        tag_colors = {
+            "[TinyML]": "#00FF9D",
+            "[IMU]": "#FF79C6",
+            "[Memory]": "#8B5CF6",
+            "[ERROR]": "#FF5C7A",
+            "[Error]": "#FF5C7A",
+            "[Warning]": "#FFC857",
+            "[ESP32]": "#00E5FF",
+            "[Replay]": "#8B5CF6",
+            "[Info]": "#00FF9D",
+        }
+        for tag, color in tag_colors.items():
             if tag in escaped:
                 escaped = escaped.replace(tag, f'<span style="color: {color}; font-weight: bold;">{tag}</span>')
         escaped = re.sub(r'^(\[[0-9:\.]+\])', r'<span style="color: rgba(255, 255, 255, 0.45);">\1</span>', escaped)
-        return escaped
+        return f'<div style="font-family:\'JetBrains Mono\', monospace; font-size:0.8rem; margin-bottom:0.25rem; white-space:pre-wrap; line-height: 1.4; color: rgba(255,255,255,0.85);">{escaped}</div>'
+
+    # Terminal & Console Controls Header
+    st.markdown("<div style='border-bottom: 1px solid rgba(255,255,255,0.04); margin: 1.5rem 0 1rem 0;'></div>", unsafe_allow_html=True)
+    
+    col_ctrl1, col_ctrl2 = st.columns([1.5, 2.5])
+    with col_ctrl1:
+        log_mode = st.radio("Log Mode", ["Parsed View", "Raw Serial"], horizontal=True, label_visibility="collapsed", key="log_view_mode")
+    with col_ctrl2:
+        search_query = st.text_input("🔍 Search logs...", value="", label_visibility="collapsed", key="console_search_query", placeholder="Search logs...")
+        
+    col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
+    
+    if 'console_paused' not in st.session_state:
+        st.session_state.console_paused = False
+    if 'paused_logs' not in st.session_state:
+        st.session_state.paused_logs = []
+        
+    with col_btn1:
+        if st.session_state.console_paused:
+            if st.button("▶️ Resume", key="pause_resume_btn", use_container_width=True):
+                st.session_state.console_paused = False
+                st.rerun()
+        else:
+            if st.button("⏸️ Pause", key="pause_resume_btn", use_container_width=True):
+                st.session_state.console_paused = True
+                if 'serial_bridge' in st.session_state:
+                    st.session_state.paused_logs = list(st.session_state.serial_bridge.serial_logs)
+                st.rerun()
+                
+    with col_btn2:
+        if st.button("🧹 Clear", key="clear_logs_btn", use_container_width=True):
+            if 'serial_bridge' in st.session_state:
+                with st.session_state.serial_bridge.lock:
+                    st.session_state.serial_bridge.serial_logs = []
+            st.session_state.paused_logs = []
+            st.toast("Console cleared", icon="🧹")
+            st.rerun()
+            
+    if 'serial_bridge' in st.session_state:
+        if st.session_state.console_paused:
+            logs_list = list(st.session_state.paused_logs)
+        else:
+            logs_list = list(st.session_state.serial_bridge.serial_logs)
+    else:
+        logs_list = []
+        
+    if search_query:
+        logs_list = [line for line in logs_list if search_query.lower() in line.lower()]
+        
+    with col_btn3:
+        copy_btn_html = """
+        <button onclick="navigator.clipboard.writeText(document.getElementById('terminal-content').innerText); alert('Logs copied to clipboard!');" 
+        style="width: 100%; height: 38px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #ffffff; font-size: 0.85rem; font-family: 'Outfit', sans-serif; cursor: pointer; transition: all 0.2s;">
+            📋 Copy Logs
+        </button>
+        """
+        st.markdown(copy_btn_html, unsafe_allow_html=True)
+        
+    with col_btn4:
+        logs_txt = "\n".join(logs_list)
+        st.download_button(
+            label="📥 Download",
+            data=logs_txt,
+            file_name=f"esp32_serial_log_{time.strftime('%Y%m%d_%H%M%S')}.txt",
+            mime="text/plain",
+            key="download_logs_btn",
+            use_container_width=True
+        )
 
     if serial_connected:
-        logs_list = st.session_state.serial_bridge.serial_logs
         if logs_list:
-            logs_html = "<br>".join([format_log_to_html(line) for line in logs_list])
+            if log_mode == "Parsed View":
+                logs_html = "".join([format_log_to_parsed_html(line) for line in logs_list])
+            else:
+                logs_html = "".join([format_log_to_raw_html(line) for line in logs_list])
         else:
-            logs_html = '<span style="color: rgba(255, 255, 255, 0.45);">Connected to serial port. Listening for ESP32 messages...</span>'
+            logs_html = '<span style="color: rgba(255, 255, 255, 0.45); font-family: \'JetBrains Mono\', monospace;">Connected to serial port. Listening for ESP32 messages...</span>'
     else:
-        logs_html = '<span style="color: #FF5C7A; font-weight: bold;">[Device Disconnected]</span> <span style="color: rgba(255, 255, 255, 0.45);">UART offline. Waiting for connection...</span>'
+        logs_html = '<span style="color: #FF5C7A; font-weight: bold; font-family: \'JetBrains Mono\', monospace;">[Device Disconnected]</span> <span style="color: rgba(255, 255, 255, 0.45); font-family: \'JetBrains Mono\', monospace;">UART offline. Waiting for connection...</span>'
 
     st.markdown(f"""
     <div style='font-size: 0.72rem; font-weight: 500; color: rgba(255, 255, 255, 0.3); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 1.5rem; margin-bottom: 0.75rem;'>On-Device Telemetry Log</div>
-    <div class="workspace-panel terminal-panel">
+    <div class="workspace-panel terminal-panel" style="position: relative;">
         <div class="terminal-header">
             <div class="terminal-dots">
                 <span class="terminal-dot dot-red"></span>
                 <span class="terminal-dot dot-yellow"></span>
                 <span class="terminal-dot dot-green"></span>
             </div>
-            <div class="terminal-title">idf.py -p /dev/ttyUSB0 -b 115200 monitor</div>
+            <div class="terminal-title">idf.py -p {conn_info['port']} -b 115200 monitor</div>
         </div>
-        <div class="terminal-body" style="height: 300px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; line-height: 1.5; color: rgba(255, 255, 255, 0.85); background: #080c14; padding: 1rem; border-radius: 0 0 12px 12px;">
+        <div class="terminal-body" style="height: 320px; overflow-y: auto; background: #080c14; padding: 1rem; border-radius: 0 0 12px 12px;">
             <div id="terminal-content">
                 {logs_html}
             </div>
         </div>
+        <button id="jump-to-latest-btn" onclick="scrollToLatest();" 
+            style="position: absolute; bottom: 15px; right: 25px; display: none; background: #00E5FF; color: #080c14; border: none; border-radius: 30px; padding: 6px 14px; font-size: 0.78rem; font-weight: bold; cursor: pointer; z-index: 999; box-shadow: 0 4px 15px rgba(0,229,255,0.4); font-family: 'Outfit', sans-serif; transition: all 0.2s;">
+            ↓ Jump to Latest
+        </button>
     </div>
     <script>
-        var terminal = document.querySelector('.terminal-body');
-        if (terminal) {{
-            var isAtBottom = terminal.scrollHeight - terminal.clientHeight - terminal.scrollTop < 30;
-            if (isAtBottom || terminal.scrollTop === 0) {{
-                terminal.scrollTop = terminal.scrollHeight;
+        (function() {{
+            var terminal = document.querySelector('.terminal-body');
+            var btn = document.getElementById('jump-to-latest-btn');
+            
+            if (!terminal) return;
+            
+            if (window.terminalAutoScroll === undefined) {{
+                window.terminalAutoScroll = true;
             }}
-        }}
+            
+            window.scrollToLatest = function() {{
+                terminal.scrollTop = terminal.scrollHeight;
+                window.terminalAutoScroll = true;
+                if (btn) btn.style.display = 'none';
+            }};
+            
+            if (!terminal.dataset.scrollListenerAdded) {{
+                terminal.addEventListener('scroll', function() {{
+                    var maxScroll = terminal.scrollHeight - terminal.clientHeight;
+                    var isAtBottom = maxScroll - terminal.scrollTop < 30;
+                    
+                    if (isAtBottom) {{
+                        window.terminalAutoScroll = true;
+                        if (btn) btn.style.display = 'none';
+                    }} else {{
+                        window.terminalAutoScroll = false;
+                        if (btn) btn.style.display = 'block';
+                    }}
+                }});
+                terminal.dataset.scrollListenerAdded = 'true';
+            }}
+            
+            if (window.terminalAutoScroll) {{
+                terminal.scrollTop = terminal.scrollHeight;
+                if (btn) btn.style.display = 'none';
+            }} else {{
+                if (btn) btn.style.display = 'block';
+            }}
+        }})();
     </script>
     """, unsafe_allow_html=True)
 
