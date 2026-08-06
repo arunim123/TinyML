@@ -1497,146 +1497,610 @@ with ws_overview:
     </style>
     """, unsafe_allow_html=True)
 
-    col_left, col_seg, col_search, col_toolbar = st.columns([2.6, 1.6, 2.3, 1.5])
-    
-    with col_left:
-        st.markdown(f"""
-        <div class="terminal-header-trigger" style="display: flex; align-items: center; gap: 8px; height: 100%;">
-            <div style="display: flex; gap: 6px;">
-                <span style="width: 10px; height: 10px; background: #FF5C7A; border-radius: 50%; display: inline-block;"></span>
-                <span style="width: 10px; height: 10px; background: #FFC857; border-radius: 50%; display: inline-block;"></span>
-                <span style="width: 10px; height: 10px; background: #00FF9D; border-radius: 50%; display: inline-block;"></span>
-            </div>
-            <span style="font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: 600; color: rgba(255,255,255,0.75); margin-left: 6px; white-space: nowrap;">On-Device Telemetry Log</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col_seg:
-        st.markdown('<div class="segmented-btn-container-trigger"></div>', unsafe_allow_html=True)
-        col_seg1, col_seg2 = st.columns(2)
-        with col_seg1:
-            if st.button("Parsed", key="seg_btn_parsed", use_container_width=True, type="primary" if st.session_state.active_log_mode == "Parsed View" else "secondary"):
-                st.session_state.active_log_mode = "Parsed View"
-                st.rerun()
-        with col_seg2:
-            if st.button("Raw", key="seg_btn_raw", use_container_width=True, type="primary" if st.session_state.active_log_mode == "Raw Serial" else "secondary"):
-                st.session_state.active_log_mode = "Raw Serial"
-                st.rerun()
-                
-    with col_search:
-        search_query = st.text_input("🔍 Search logs...", value="", label_visibility="collapsed", key="console_search_query", placeholder="Search logs...")
-        
-    if search_query:
-        logs_list = [line for line in logs_list if search_query.lower() in line.lower()]
-        
-    logs_txt = "\n".join(logs_list)
-        
-    with col_toolbar:
-        col_btn_pause, col_btn_clear, col_btn_copy, col_btn_dl = st.columns(4)
-        
-        with col_btn_pause:
-            if st.session_state.console_paused:
-                if st.button("▶", key="pause_btn", help="Resume console updates", use_container_width=True):
-                    st.session_state.console_paused = False
-                    st.rerun()
-            else:
-                if st.button("⏸", key="pause_btn", help="Pause console updates", use_container_width=True):
-                    st.session_state.console_paused = True
-                    if 'serial_bridge' in st.session_state:
-                        st.session_state.paused_logs = list(st.session_state.serial_bridge.serial_logs)
-                    st.rerun()
-                    
-        with col_btn_clear:
-            if st.button("🧹", key="clear_logs_btn", help="Clear console", use_container_width=True):
-                if 'serial_bridge' in st.session_state:
-                    with st.session_state.serial_bridge.lock:
-                        st.session_state.serial_bridge.serial_logs = []
-                st.session_state.paused_logs = []
-                st.toast("Console cleared", icon="🧹")
-                st.rerun()
-                
-        with col_btn_copy:
-            st.markdown("""
-            <button onclick="navigator.clipboard.writeText(document.getElementById('terminal-content').innerText); alert('Logs copied to clipboard!');" 
-                title="Copy logs"
-                style="width: 28px; height: 28px; background: transparent; border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; color: rgba(255,255,255,0.7); font-size: 0.85rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin: 0px; box-sizing: border-box;">
-                📋
-            </button>
-            """, unsafe_allow_html=True)
-            
-        with col_btn_dl:
-            st.download_button(
-                label="⬇",
-                data=logs_txt,
-                file_name=f"esp32_serial_log_{time.strftime('%Y%m%d_%H%M%S')}.txt",
-                mime="text/plain",
-                key="download_logs_btn",
-                help="Download logs",
-                use_container_width=True
-            )
+    # Hidden control block for callbacks
+    col_hide = st.columns(1)
+    with col_hide[0]:
+        st.markdown('<div class="hidden-control-container"></div>', unsafe_allow_html=True)
+        if st.button("Clear Hidden", key="hidden_clear_logs_btn"):
+            if 'serial_bridge' in st.session_state:
+                with st.session_state.serial_bridge.lock:
+                    st.session_state.serial_bridge.serial_logs = []
+            st.session_state.paused_logs = []
+            st.toast("Console cleared", icon="🧹")
+            st.rerun()
 
-    if serial_connected:
-        if logs_list:
-            if st.session_state.active_log_mode == "Parsed View":
-                logs_html = "".join([format_log_to_parsed_html(line) for line in logs_list])
-            else:
-                logs_html = "".join([format_log_to_raw_html(line) for line in logs_list])
-        else:
-            logs_html = '<span style="color: rgba(255, 255, 255, 0.45); font-family: \'JetBrains Mono\', monospace;">Connected to serial port. Listening for ESP32 messages...</span>'
+    if 'serial_bridge' in st.session_state:
+        logs_list = list(st.session_state.serial_bridge.serial_logs)
     else:
-        logs_html = '<span style="color: #FF5C7A; font-weight: bold; font-family: \'JetBrains Mono\', monospace;">[Device Disconnected]</span> <span style="color: rgba(255, 255, 255, 0.45); font-family: \'JetBrains Mono\', monospace;">UART offline. Waiting for connection...</span>'
+        logs_list = []
 
-    st.markdown(f"""
-    <div class="workspace-panel terminal-panel-body" style="position: relative;">
-        <div class="terminal-body" style="height: 320px; overflow-y: auto; background: #080c14; padding: 1rem; border-radius: 0 0 12px 12px; border: 1px solid rgba(255, 255, 255, 0.05); border-top: none;">
-            <div id="terminal-content">
-                {logs_html}
+    import json
+    logs_json = json.dumps(logs_list)
+
+    # Style block for developer terminal
+    st.markdown("""
+    <style>
+    /* Hide the hidden control container */
+    div[data-testid="column"]:has(div.hidden-control-container) {
+        display: none !important;
+        height: 0px !important;
+        margin: 0px !important;
+        padding: 0px !important;
+    }
+    
+    .developer-terminal {
+        background: #080c14;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        overflow: hidden;
+        margin-top: 1.5rem;
+        margin-bottom: 2rem;
+        font-family: 'JetBrains Mono', monospace;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .dev-terminal-header {
+        background: #0d1117;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        user-select: none;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .terminal-dots {
+        display: flex;
+        gap: 6px;
+    }
+
+    .terminal-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .dot-red { background: #FF5C7A; }
+    .dot-yellow { background: #FFC857; }
+    .dot-green { background: #00FF9D; }
+
+    .terminal-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.75);
+        letter-spacing: 0.02em;
+    }
+
+    .header-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    /* Segmented toggle styling */
+    .segmented-control {
+        position: relative;
+        display: flex;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        padding: 2px;
+        user-select: none;
+        width: 120px;
+        height: 28px;
+        align-items: center;
+    }
+
+    .segment-btn {
+        flex: 1;
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.45);
+        text-align: center;
+        cursor: pointer;
+        z-index: 2;
+        transition: color 0.2s ease;
+        line-height: 22px;
+        font-family: 'Outfit', sans-serif;
+    }
+
+    .segment-btn.active {
+        color: #ffffff;
+    }
+
+    .segmented-glider {
+        position: absolute;
+        height: 22px;
+        width: 57px; /* (120 - 4 - 2)/2 */
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        z-index: 1;
+        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        transform: translateX(0);
+        left: 2px;
+    }
+
+    /* Search Box style */
+    .search-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 10px;
+        color: rgba(255, 255, 255, 0.35);
+        pointer-events: none;
+        transition: color 0.2s ease;
+    }
+
+    #dev-search-input {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 30px;
+        padding: 4px 10px 4px 28px;
+        color: #ffffff;
+        font-size: 0.72rem;
+        font-family: 'Outfit', sans-serif;
+        outline: none;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        width: 120px;
+        height: 28px;
+        box-sizing: border-box;
+    }
+
+    #dev-search-input:focus {
+        width: 160px;
+        border-color: #00E5FF;
+        background: rgba(255, 255, 255, 0.04);
+        box-shadow: 0 0 10px rgba(0, 229, 255, 0.15);
+    }
+
+    #dev-search-input:focus + .search-icon {
+        color: #00E5FF;
+    }
+
+    /* Toolbar Style */
+    .terminal-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .toolbar-btn {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        border-radius: 6px;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(255, 255, 255, 0.55);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    .toolbar-btn:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+    }
+
+    /* Custom Tooltip helper styling */
+    .tooltip-container {
+        position: relative;
+    }
+
+    .tooltip-text {
+        visibility: hidden;
+        background-color: #0d1117;
+        color: #fff;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        padding: 4px 8px;
+        position: absolute;
+        z-index: 10000;
+        bottom: -32px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 0.65rem;
+        white-space: nowrap;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+        font-family: 'Outfit', sans-serif;
+    }
+
+    .tooltip-container:hover .tooltip-text {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    /* Terminal Body Style */
+    .dev-terminal-body {
+        height: 400px; /* Enhanced vertical height */
+        overflow-y: auto;
+        padding: 12px;
+        position: relative;
+        background: #080c14;
+        box-sizing: border-box;
+    }
+
+    #dev-terminal-content {
+        line-height: 1.5;
+        font-size: 0.72rem; /* Compact professional font size */
+        color: rgba(255, 255, 255, 0.85);
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Jump to latest button */
+    #dev-jump-to-latest-btn {
+        position: absolute;
+        bottom: 16px;
+        right: 24px;
+        background: #00E5FF;
+        color: #080c14;
+        border: none;
+        border-radius: 30px;
+        padding: 6px 14px;
+        font-size: 0.72rem;
+        font-weight: bold;
+        cursor: pointer;
+        z-index: 999;
+        box-shadow: 0 4px 15px rgba(0, 229, 255, 0.35);
+        font-family: 'Outfit', sans-serif;
+        transition: all 0.2s ease;
+    }
+
+    #dev-jump-to-latest-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(0, 229, 255, 0.55);
+    }
+    </style>
+
+    <div class="developer-terminal">
+        <div class="dev-terminal-header">
+            <!-- Left Header -->
+            <div class="header-left">
+                <div class="terminal-dots">
+                    <span class="terminal-dot dot-red"></span>
+                    <span class="terminal-dot dot-yellow"></span>
+                    <span class="terminal-dot dot-green"></span>
+                </div>
+                <span class="terminal-title">On-Device Telemetry Log</span>
+            </div>
+            
+            <!-- Right Header Controls -->
+            <div class="header-right">
+                <!-- Segmented Control -->
+                <div class="segmented-control">
+                    <div class="segmented-glider"></div>
+                    <div id="btn-parsed" class="segment-btn active" onclick="setLogMode('parsed')">Parsed</div>
+                    <div id="btn-raw" class="segment-btn" onclick="setLogMode('raw')">Raw</div>
+                </div>
+                
+                <!-- Search container -->
+                <div class="search-container">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input type="text" id="dev-search-input" oninput="handleSearch(this.value)" placeholder="Search logs..." />
+                </div>
+                
+                <!-- Toolbar buttons -->
+                <div class="terminal-toolbar">
+                    <div class="tooltip-container">
+                        <button id="btn-pause" onclick="togglePause()" class="toolbar-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                        </button>
+                        <span id="tooltip-pause" class="tooltip-text">Pause logs</span>
+                    </div>
+                    
+                    <div class="tooltip-container">
+                        <button onclick="clearLogs()" class="toolbar-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                        </button>
+                        <span class="tooltip-text">Clear console</span>
+                    </div>
+                    
+                    <div class="tooltip-container">
+                        <button onclick="copyLogs()" class="toolbar-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        </button>
+                        <span class="tooltip-text">Copy logs</span>
+                    </div>
+                    
+                    <div class="tooltip-container">
+                        <button onclick="downloadLogs()" class="toolbar-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        </button>
+                        <span class="tooltip-text">Download logs</span>
+                    </div>
+                </div>
             </div>
         </div>
-        <button id="jump-to-latest-btn" onclick="scrollToLatest();" 
-            style="position: absolute; bottom: 15px; right: 25px; display: none; background: #00E5FF; color: #080c14; border: none; border-radius: 30px; padding: 6px 14px; font-size: 0.78rem; font-weight: bold; cursor: pointer; z-index: 999; box-shadow: 0 4px 15px rgba(0,229,255,0.4); font-family: 'Outfit', sans-serif; transition: all 0.2s;">
-            ↓ Jump to Latest
-        </button>
+        
+        <!-- Viewport log body -->
+        <div class="dev-terminal-body">
+            <div id="dev-terminal-content"></div>
+            <button id="dev-jump-to-latest-btn" onclick="scrollToLatest()" style="display: none;">
+                ↓ Jump to Latest
+            </button>
+        </div>
     </div>
+
     <script>
         (function() {{
-            var terminal = document.querySelector('.terminal-body');
-            var btn = document.getElementById('jump-to-latest-btn');
+            var rawLogs = {logs_json};
             
-            if (!terminal) return;
+            if (window.terminalLogMode === undefined) window.terminalLogMode = 'parsed';
+            if (window.terminalSearchQuery === undefined) window.terminalSearchQuery = '';
+            if (window.terminalPaused === undefined) window.terminalPaused = false;
+            if (window.terminalAutoScroll === undefined) window.terminalAutoScroll = true;
             
-            if (window.terminalAutoScroll === undefined) {{
-                window.terminalAutoScroll = true;
+            var container = document.getElementById('dev-terminal-content');
+            var terminalBody = document.querySelector('.dev-terminal-body');
+            var jumpBtn = document.getElementById('dev-jump-to-latest-btn');
+            var searchInput = document.getElementById('dev-search-input');
+            var pauseBtn = document.getElementById('btn-pause');
+            var tooltipPause = document.getElementById('tooltip-pause');
+            
+            // Sync search value input
+            if (searchInput) searchInput.value = window.terminalSearchQuery;
+            
+            // Set segmented control active state glider
+            var glider = document.querySelector('.segmented-glider');
+            var parsedBtn = document.getElementById('btn-parsed');
+            var rawBtn = document.getElementById('btn-raw');
+            if (glider && parsedBtn && rawBtn) {{
+                if (window.terminalLogMode === 'parsed') {{
+                    glider.style.transform = 'translateX(0px)';
+                    parsedBtn.classList.add('active');
+                    rawBtn.classList.remove('active');
+                }} else {{
+                    glider.style.transform = 'translateX(59px)';
+                    rawBtn.classList.add('active');
+                    parsedBtn.classList.remove('active');
+                }}
             }}
             
-            window.scrollToLatest = function() {{
-                terminal.scrollTop = terminal.scrollHeight;
-                window.terminalAutoScroll = true;
-                if (btn) btn.style.display = 'none';
+            // Sync pause button icon
+            if (pauseBtn) {{
+                if (window.terminalPaused) {{
+                    pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+                    if (tooltipPause) tooltipPause.innerText = 'Resume logs';
+                }} else {{
+                    pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+                    if (tooltipPause) tooltipPause.innerText = 'Pause logs';
+                }}
+            }}
+            
+            window.setLogMode = function(mode) {{
+                window.terminalLogMode = mode;
+                if (glider && parsedBtn && rawBtn) {{
+                    if (mode === 'parsed') {{
+                        glider.style.transform = 'translateX(0px)';
+                        parsedBtn.classList.add('active');
+                        rawBtn.classList.remove('active');
+                    }} else {{
+                        glider.style.transform = 'translateX(59px)';
+                        rawBtn.classList.add('active');
+                        parsedBtn.classList.remove('active');
+                    }}
+                }}
+                renderLogs();
             }};
             
-            if (!terminal.dataset.scrollListenerAdded) {{
-                terminal.addEventListener('scroll', function() {{
-                    var maxScroll = terminal.scrollHeight - terminal.clientHeight;
-                    var isAtBottom = maxScroll - terminal.scrollTop < 30;
+            window.handleSearch = function(val) {{
+                window.terminalSearchQuery = val.toLowerCase();
+                renderLogs();
+            }};
+            
+            window.togglePause = function() {{
+                window.terminalPaused = !window.terminalPaused;
+                if (window.terminalPaused) {{
+                    window.frozenLogs = [...rawLogs];
+                }}
+                
+                if (pauseBtn) {{
+                    if (window.terminalPaused) {{
+                        pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+                        if (tooltipPause) tooltipPause.innerText = 'Resume logs';
+                    }} else {{
+                        pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+                        if (tooltipPause) tooltipPause.innerText = 'Pause logs';
+                    }}
+                }}
+                renderLogs();
+            }};
+            
+            window.clearLogs = function() {{
+                var pythonClearBtn = parent.document.querySelector('button[key="hidden_clear_logs_btn"]');
+                if (pythonClearBtn) {{
+                    pythonClearBtn.click();
+                }} else {{
+                    window.frozenLogs = [];
+                    rawLogs = [];
+                    renderLogs();
+                }}
+            }};
+            
+            window.copyLogs = function() {{
+                if (container) {{
+                    var tempElement = document.createElement('textarea');
+                    tempElement.value = container.innerText;
+                    document.body.appendChild(tempElement);
+                    tempElement.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(tempElement);
+                    alert('Logs copied to clipboard!');
+                }}
+            }};
+            
+            window.downloadLogs = function() {{
+                var logsToUse = window.terminalPaused && window.frozenLogs ? window.frozenLogs : rawLogs;
+                var text = logsToUse.join('\\n');
+                var blob = new Blob([text], {{type: 'text/plain'}});
+                var elem = window.document.createElement('a');
+                elem.href = window.URL.createObjectURL(blob);
+                elem.download = 'esp32_serial_log.txt';
+                document.body.appendChild(elem);
+                elem.click();
+                document.body.removeChild(elem);
+            }};
+            
+            window.scrollToLatest = function() {{
+                if (terminalBody) {{
+                    terminalBody.scrollTop = terminalBody.scrollHeight;
+                    window.terminalAutoScroll = true;
+                    if (jumpBtn) jumpBtn.style.display = 'none';
+                }}
+            }};
+            
+            var tagColors = {{
+                "[TinyML]": "#00FF9D",
+                "[IMU]": "#FF79C6",
+                "[Memory]": "#8B5CF6",
+                "[ERROR]": "#FF5C7A",
+                "[Error]": "#FF5C7A",
+                "[Warning]": "#FFC857",
+                "[ESP32]": "#00E5FF",
+                "[Replay]": "#8B5CF6",
+                "[Info]": "#00FF9D"
+            }};
+            
+            function escapeHtml(text) {{
+                return text
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }}
+            
+            function highlightTags(text) {{
+                var escaped = escapeHtml(text);
+                for (var tag in tagColors) {{
+                    if (escaped.indexOf(tag) !== -1) {{
+                        escaped = escaped.split(tag).join('<span style="color:' + tagColors[tag] + '; font-weight:bold;">' + tag + '</span>');
+                    }}
+                }}
+                return escaped;
+            }}
+            
+            function renderLogs() {{
+                if (!container) return;
+                
+                var logsToUse = window.terminalPaused && window.frozenLogs ? window.frozenLogs : rawLogs;
+                
+                if (window.terminalSearchQuery) {{
+                    logsToUse = logsToUse.filter(function(line) {{
+                        return line.toLowerCase().indexOf(window.terminalSearchQuery) !== -1;
+                    }});
+                }}
+                
+                var htmlContent = '';
+                
+                for (var i = 0; i < logsToUse.length; i++) {{
+                    var line = logsToUse[i];
+                    var matchTs = line.match(/^(\\[[0-9:\\.]+\\])\\s+(.*)$/);
+                    if (!matchTs) {{
+                        htmlContent += '<div style="margin-bottom:4px; opacity:0.75;">' + escapeHtml(line) + '</div>';
+                        continue;
+                    }}
+                    
+                    var timestamp = matchTs[1];
+                    var payload = matchTs[2].trim();
+                    
+                    if (window.terminalLogMode === 'parsed' && payload.startsWith('{{') && payload.endsWith('}}')) {{
+                        try {{
+                            var data = JSON.parse(payload);
+                            if (data.type === 'telemetry') {{
+                                var mag = data.mag.toFixed(3);
+                                var pred = data.pred;
+                                var predName = pred === 1 ? 'ANOMALOUS' : 'NORMAL';
+                                var predColor = pred === 1 ? '#FF5C7A' : '#00FF9D';
+                                var conf = (data.conf * 100).toFixed(1);
+                                var sram = data.static_ram_kb.toFixed(1);
+                                var buf = data.buffer;
+                                var lat = data.latency_ms.toFixed(2);
+                                
+                                htmlContent += `
+                                <div style="background:rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.03); border-radius:6px; padding:6px 12px; margin-bottom:8px; display:grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap:8px;">
+                                    <div>
+                                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.35); font-family: monospace;">${{timestamp}}</div>
+                                    </div>
+                                    <div>
+                                        <span style="color:#00E5FF; font-weight:bold; font-size:0.7rem;">IMU</span><br>
+                                        <span style="color:rgba(255,255,255,0.5);">• Mag: </span><strong>${{mag}} g</strong>
+                                    </div>
+                                    <div>
+                                        <span style="color:#00FF9D; font-weight:bold; font-size:0.7rem;">TinyML</span><br>
+                                        <span style="color:rgba(255,255,255,0.5);">• Pred: </span><strong style="color:${{predColor}};">${{predName}}</strong> (${{conf}}%)
+                                    </div>
+                                    <div>
+                                        <span style="color:#8B5CF6; font-weight:bold; font-size:0.7rem;">Memory</span><br>
+                                        <span style="color:rgba(255,255,255,0.5);">• SRAM: </span><strong>${{sram}} KB</strong>
+                                    </div>
+                                    <div>
+                                        <span style="color:#FFC857; font-weight:bold; font-size:0.7rem;">Replay</span><br>
+                                        <span style="color:rgba(255,255,255,0.5);">• Buf: </span><strong>${{buf}} / 50</strong>
+                                    </div>
+                                    <div>
+                                        <span style="color:#FF79C6; font-weight:bold; font-size:0.7rem;">Perf</span><br>
+                                        <span style="color:rgba(255,255,255,0.5);">• Lat: </span><strong>${{lat}} ms</strong>
+                                    </div>
+                                </div>
+                                `;
+                                continue;
+                            }}
+                        } catch(e) {{}}
+                    }}
+                    
+                    var styledPayload = highlightTags(payload);
+                    var grayTimestamp = '<span style="color:rgba(255,255,255,0.3); margin-right:8px;">' + timestamp + '</span>';
+                    htmlContent += '<div style="margin-bottom:3px; line-height: 1.4; font-size: 0.72rem;">' + grayTimestamp + styledPayload + '</div>';
+                }}
+                
+                container.innerHTML = htmlContent;
+                
+                if (window.terminalAutoScroll && terminalBody) {{
+                    terminalBody.scrollTop = terminalBody.scrollHeight;
+                }}
+            }}
+            
+            if (terminalBody && !terminalBody.dataset.scrollListenerAdded) {{
+                terminalBody.addEventListener('scroll', function() {{
+                    var maxScroll = terminalBody.scrollHeight - terminalBody.clientHeight;
+                    var isAtBottom = maxScroll - terminalBody.scrollTop < 25;
                     
                     if (isAtBottom) {{
                         window.terminalAutoScroll = true;
-                        if (btn) btn.style.display = 'none';
+                        if (jumpBtn) jumpBtn.style.display = 'none';
                     }} else {{
                         window.terminalAutoScroll = false;
-                        if (btn) btn.style.display = 'block';
+                        if (jumpBtn) jumpBtn.style.display = 'block';
                     }}
                 }});
-                terminal.dataset.scrollListenerAdded = 'true';
+                terminalBody.dataset.scrollListenerAdded = 'true';
             }}
             
-            if (window.terminalAutoScroll) {{
-                terminal.scrollTop = terminal.scrollHeight;
-                if (btn) btn.style.display = 'none';
-            }} else {{
-                if (btn) btn.style.display = 'block';
-            }}
+            renderLogs();
         }})();
     </script>
     """, unsafe_allow_html=True)
