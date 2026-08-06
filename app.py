@@ -803,33 +803,12 @@ if 'serial_bridge' not in st.session_state and serial_bridge is not None:
     st.session_state.serial_bridge = serial_bridge.ESP32SerialBridge()
 
 if 'vibration_history' not in st.session_state:
-    now = time.time()
-    st.session_state.vibration_history = pd.DataFrame([
-        {
-            "Timestamp": now - (15 - i) * 0.2,
-            "Count": i,
-            "Magnitude_g": 1.0 + random.uniform(-0.03, 0.03),
-            "Pred_Label": 0,
-            "Pred_Name": "NORMAL",
-            "Confidence": 98.5 + random.uniform(-1, 1),
-            "Latency_ms": 1.8 + random.uniform(-0.1, 0.1),
-            "Buffer_Count": min(i, 50)
-        }
-        for i in range(1, 16)
+    st.session_state.vibration_history = pd.DataFrame(columns=[
+        "Timestamp", "Count", "Magnitude_g", "Pred_Label", "Pred_Name", "Confidence", "Latency_ms", "Buffer_Count"
     ])
 
-if 'sim_fault_active' not in st.session_state:
-    st.session_state.sim_fault_active = False
-
-# fault_toggle is the widget key; sim_fault_active is the backend truth
-if 'fault_toggle' not in st.session_state:
-    st.session_state.fault_toggle = False
-
-if 'sim_step_count' not in st.session_state:
-    st.session_state.sim_step_count = 15
-
-if 'main_live_stream_toggle' not in st.session_state:
-    st.session_state.main_live_stream_toggle = True
+if 'last_processed_count' not in st.session_state:
+    st.session_state.last_processed_count = -1
 
 # Read bridge status
 serial_connected = False
@@ -838,8 +817,8 @@ if 'serial_bridge' in st.session_state and st.session_state.serial_bridge.ser an
 
 # Define widget callback handlers
 def handle_connect_usb():
-    selected_port = st.session_state.get("main_serial_port", "COM3")
-    if "Simulated" not in selected_port and 'serial_bridge' in st.session_state:
+    selected_port = st.session_state.get("main_serial_port", None)
+    if selected_port and 'serial_bridge' in st.session_state:
         success = st.session_state.serial_bridge.connect(selected_port)
         if success:
             st.toast(f"Connected to {selected_port}", icon="🔌")
@@ -854,20 +833,12 @@ def handle_disconnect_usb():
 def handle_normal_injection():
     if 'serial_bridge' in st.session_state:
         sent = st.session_state.serial_bridge.send_label(0)
-        st.toast("Transmitted label [0: Normal] over serial!" if sent else "Simulated Label [0: Normal] queued", icon="🟢")
-    st.session_state.sim_fault_active = False
-    st.session_state.fault_toggle = False
+        st.toast("Transmitted label [0: Normal] over serial!" if sent else "Connection offline", icon="🟢")
 
 def handle_anomaly_injection():
     if 'serial_bridge' in st.session_state:
         sent = st.session_state.serial_bridge.send_label(1)
-        st.toast("Transmitted label [1: Anomaly] over serial!" if sent else "Simulated Label [1: Anomaly] queued", icon="🔴")
-    st.session_state.sim_fault_active = True
-    st.session_state.fault_toggle = True
-
-# Called when the fault toggle widget changes — syncs to backend truth
-def _sync_fault_toggle():
-    st.session_state.sim_fault_active = st.session_state.fault_toggle
+        st.toast("Transmitted label [1: Anomaly] over serial!" if sent else "Connection offline", icon="🔴")
 
 # ---------------------------------------------------------------------
 # Sidebar Panel Layout (Overview Rail)
@@ -898,55 +869,45 @@ with st.sidebar:
     
     st.markdown("<div class='sidebar-section-title' style='margin-top: 1rem;'>Algorithm Pipeline</div>", unsafe_allow_html=True)
     sparse_engine_active = st.toggle("Sparse-Update & 4-bit Replay Engine", value=True)
-    
 
 
 # ---------------------------------------------------------------------
 # Telemetry Stream Updates
 # ---------------------------------------------------------------------
-live_sim_on = st.session_state.main_live_stream_toggle
-if live_sim_on:
-    st.session_state.sim_step_count += 1
-    current_time = time.time()
+if serial_connected:
+    telem = st.session_state.serial_bridge.get_latest_telemetry()
+    count = telem.get("count", 0)
     
-    if serial_connected:
-        telem = st.session_state.serial_bridge.get_latest_telemetry()
+    if count != st.session_state.get("last_processed_count", -1):
+        current_time = time.time()
         mag = telem.get("mag", 1.0)
         pred = telem.get("pred", 0)
         conf = telem.get("conf", 0.95) * 100.0
         lat = telem.get("latency_ms", 1.8)
         buf_c = telem.get("buffer", 0)
-    else:
-        # Simulated vibration telemetry stream
-        if not st.session_state.sim_fault_active:
-            mag = 1.0 + np.random.normal(0, 0.04)
-            pred = 0
-            conf = 98.5 + np.random.normal(0, 0.8)
-        else:
-            mag = 1.45 + np.random.normal(0, 0.12)
-            pred = 1
-            conf = 94.2 + np.random.normal(0, 1.5)
-        lat = 1.8 + np.random.normal(0, 0.05)
-        buf_c = min(st.session_state.sim_step_count, 50)
+        pred_name = "ANOMALOUS" if pred == 1 else "NORMAL"
+        
+        new_entry = pd.DataFrame([{
+            "Timestamp": current_time,
+            "Count": count,
+            "Magnitude_g": round(mag, 3),
+            "Pred_Label": pred,
+            "Pred_Name": pred_name,
+            "Confidence": round(min(max(conf, 50.0), 99.9), 1),
+            "Latency_ms": round(lat, 2),
+            "Buffer_Count": buf_c
+        }])
+        
+        st.session_state.vibration_history = pd.concat([st.session_state.vibration_history, new_entry], ignore_index=True)
+        if len(st.session_state.vibration_history) > 20:
+            st.session_state.vibration_history = st.session_state.vibration_history.iloc[1:].reset_index(drop=True)
+            
+        st.session_state.last_processed_count = count
 
-    pred_name = "ANOMALOUS" if pred == 1 else "NORMAL"
-
-    new_entry = pd.DataFrame([{
-        "Timestamp": current_time,
-        "Count": st.session_state.sim_step_count,
-        "Magnitude_g": round(mag, 3),
-        "Pred_Label": pred,
-        "Pred_Name": pred_name,
-        "Confidence": round(min(max(conf, 50.0), 99.9), 1),
-        "Latency_ms": round(lat, 2),
-        "Buffer_Count": buf_c
-    }])
-
-    st.session_state.vibration_history = pd.concat([st.session_state.vibration_history, new_entry], ignore_index=True)
-    if len(st.session_state.vibration_history) > 20:
-        st.session_state.vibration_history = st.session_state.vibration_history.iloc[1:].reset_index(drop=True)
-
-latest_data = st.session_state.vibration_history.iloc[-1]
+if len(st.session_state.vibration_history) > 0:
+    latest_data = st.session_state.vibration_history.iloc[-1]
+else:
+    latest_data = None
 
 # Calculate real static memory footprint
 sram_kb = 33.60
@@ -995,24 +956,59 @@ ws_overview, ws_continual, ws_replay, ws_runtime, ws_deploy = st.tabs([
 # WORKSPACE 1: OVERVIEW
 # ---------------------------------------------------------------------
 with ws_overview:
-    pred_class = "text-success" if latest_data["Pred_Label"] == 0 else "text-danger"
-    mag_percent = min(round((latest_data['Magnitude_g'] / 1.5) * 100, 1), 100.0)
-    sram_percent = min(round((sram_kb / 200) * 100, 1), 100.0)
+    # Initialize sram state tracking in session state
+    if 'sram_kb' not in st.session_state:
+        st.session_state.sram_kb = "Unavailable"
+        
+    if serial_connected:
+        telem = st.session_state.serial_bridge.get_latest_telemetry()
+        sram_val = telem.get("static_ram_kb", None)
+        if sram_val is not None:
+            st.session_state.sram_kb = round(float(sram_val), 2)
+            
+    sram_kb = st.session_state.sram_kb
+    if sram_kb != "Unavailable":
+        sram_percent = min(round((sram_kb / 200) * 100, 1), 100.0)
+    else:
+        sram_percent = 0.0
+
+    if latest_data is not None:
+        pred_class = "text-success" if latest_data["Pred_Label"] == 0 else "text-danger"
+        pred_name = latest_data['Pred_Name']
+        confidence = f"{latest_data['Confidence']}%"
+        magnitude_val = f"{latest_data['Magnitude_g']:.3f}"
+        magnitude_unit = "g"
+        mag_percent = min(round((latest_data['Magnitude_g'] / 1.5) * 100, 1), 100.0)
+        latency_val = f"{latest_data['Latency_ms']}"
+        latency_unit = "ms"
+        buf_count = f"{int(latest_data['Buffer_Count'])}"
+        buf_c_raw = int(latest_data['Buffer_Count'])
+    else:
+        pred_class = "text-violet"
+        pred_name = "Unavailable"
+        confidence = "Unavailable"
+        magnitude_val = "Unavailable"
+        magnitude_unit = ""
+        mag_percent = 0.0
+        latency_val = "Unavailable"
+        latency_unit = ""
+        buf_count = "Unavailable"
+        buf_c_raw = 0
 
     st.markdown(f"""
     <div class="hud-panel">
         <div class="hud-card">
             <div class="hud-label">Health State Prediction</div>
             <div class="hud-value-row">
-                <span class="hud-val {pred_class}">{latest_data['Pred_Name']}</span>
+                <span class="hud-val {pred_class}">{pred_name}</span>
             </div>
-            <div class="hud-subtitle text-cyan">Confidence: {latest_data['Confidence']}%</div>
+            <div class="hud-subtitle text-cyan">Confidence: {confidence}</div>
         </div>
         <div class="hud-card">
             <div class="hud-label">Vibration Magnitude</div>
             <div class="hud-value-row">
-                <span class="hud-val">{latest_data['Magnitude_g']:.3f}</span>
-                <span class="hud-unit">g</span>
+                <span class="hud-val">{magnitude_val}</span>
+                <span class="hud-unit">{magnitude_unit}</span>
             </div>
             <div class="hud-progress-bar">
                 <div class="hud-progress-fill" style="width: {mag_percent}%;"></div>
@@ -1023,7 +1019,7 @@ with ws_overview:
             <div class="hud-label">Static SRAM</div>
             <div class="hud-value-row">
                 <span class="hud-val">{sram_kb}</span>
-                <span class="hud-unit">KB</span>
+                <span class="hud-unit">{'KB' if sram_kb != "Unavailable" else ""}</span>
             </div>
             <div class="hud-progress-bar">
                 <div class="hud-progress-fill" style="width: {sram_percent}%; background-color: #00FF9D;"></div>
@@ -1033,10 +1029,10 @@ with ws_overview:
         <div class="hud-card">
             <div class="hud-label">Inference & Replay</div>
             <div class="hud-value-row">
-                <span class="hud-val">{latest_data['Latency_ms']}</span>
-                <span class="hud-unit">ms</span>
+                <span class="hud-val">{latency_val}</span>
+                <span class="hud-unit">{latency_unit}</span>
             </div>
-            <div class="hud-subtitle text-cyan">Replay Reservoir: {int(latest_data['Buffer_Count'])}/50 samples</div>
+            <div class="hud-subtitle text-cyan">Replay Reservoir: {buf_count}/50 samples</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1052,18 +1048,26 @@ with ws_overview:
         chart_tab1, chart_tab2 = st.columns(2)
         with chart_tab1:
             fig_vib = go.Figure()
-            counts = st.session_state.vibration_history["Count"]
-            mags = st.session_state.vibration_history["Magnitude_g"]
-            
-            fig_vib.add_trace(go.Scatter(
-                x=counts,
-                y=mags,
-                mode='lines',
-                name='Acceleration Magnitude',
-                line=dict(color='#00E5FF', width=1.5, shape='spline'),
-            ))
-            fig_vib.add_hline(y=1.00, line_dash="dash", line_color="rgba(0, 255, 157, 0.15)")
-            fig_vib.add_hline(y=1.30, line_dash="dash", line_color="rgba(255, 92, 122, 0.15)")
+            if len(st.session_state.vibration_history) > 0:
+                counts = st.session_state.vibration_history["Count"]
+                mags = st.session_state.vibration_history["Magnitude_g"]
+                
+                fig_vib.add_trace(go.Scatter(
+                    x=counts,
+                    y=mags,
+                    mode='lines',
+                    name='Acceleration Magnitude',
+                    line=dict(color='#00E5FF', width=1.5, shape='spline'),
+                ))
+                fig_vib.add_hline(y=1.00, line_dash="dash", line_color="rgba(0, 255, 157, 0.15)")
+                fig_vib.add_hline(y=1.30, line_dash="dash", line_color="rgba(255, 92, 122, 0.15)")
+            else:
+                fig_vib.add_annotation(
+                    text="Device Disconnected<br>Waiting for telemetry data...",
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.5, showarrow=False,
+                    font=dict(color="rgba(255,255,255,0.45)", size=12)
+                )
             
             fig_vib.update_layout(
                 template="plotly_dark",
@@ -1089,17 +1093,26 @@ with ws_overview:
             
         with chart_tab2:
             fig_conf = go.Figure()
-            confs = st.session_state.vibration_history["Confidence"]
-            preds = st.session_state.vibration_history["Pred_Label"]
-            colors = ['rgba(0, 255, 157, 0.3)' if p == 0 else 'rgba(255, 92, 122, 0.3)' for p in preds]
-            
-            fig_conf.add_trace(go.Bar(
-                x=counts,
-                y=confs,
-                marker_color=colors,
-                name='Confidence',
-                marker_line_width=0
-            ))
+            if len(st.session_state.vibration_history) > 0:
+                counts = st.session_state.vibration_history["Count"]
+                confs = st.session_state.vibration_history["Confidence"]
+                preds = st.session_state.vibration_history["Pred_Label"]
+                colors = ['rgba(0, 255, 157, 0.3)' if p == 0 else 'rgba(255, 92, 122, 0.3)' for p in preds]
+                
+                fig_conf.add_trace(go.Bar(
+                    x=counts,
+                    y=confs,
+                    marker_color=colors,
+                    name='Confidence',
+                    marker_line_width=0
+                ))
+            else:
+                fig_conf.add_annotation(
+                    text="Device Disconnected<br>Waiting for telemetry data...",
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.5, showarrow=False,
+                    font=dict(color="rgba(255,255,255,0.45)", size=12)
+                )
             fig_conf.update_layout(
                 template="plotly_dark",
                 paper_bgcolor='rgba(0,0,0,0)',
@@ -1145,14 +1158,14 @@ with ws_overview:
             st.markdown("""
             <div class="target-node">
                 <div class="target-node-header">
-                    <span class="target-node-title">Virtual Sim Engine</span>
-                    <span class="target-badge-sim">SIMULATION</span>
+                    <span class="target-node-title">ESP32 Core LX6</span>
+                    <span class="target-badge-offline" style="background: rgba(255, 92, 122, 0.08); border: 1px solid rgba(255, 92, 122, 0.2); color: #FF5C7A; font-size: 0.62rem; font-weight: 800; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.05em;">DISCONNECTED</span>
                 </div>
-                <div class="target-node-meta">Task: Vibration Stream Generator</div>
+                <div class="target-node-meta">Task: Anomaly Classification Engine</div>
                 <div class="target-node-progress">
-                    <div class="target-progress-fill" style="width: 100%; background: #FFC857;"></div>
+                    <div class="target-progress-fill" style="width: 0%; background: #FF5C7A;"></div>
                 </div>
-                <div class="target-node-status">Status: Local Feed</div>
+                <div class="target-node-status" style="color: #FF5C7A;">Status: Device Disconnected</div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -1161,12 +1174,14 @@ with ws_overview:
         if serial_bridge and serial_bridge.SERIAL_AVAILABLE:
             available_ports = serial_bridge.list_available_serial_ports()
             if not available_ports:
-                available_ports = ["Simulated Serial (No Hardware)", "COM3", "COM4", "/dev/ttyUSB0"]
-            selected_port = st.selectbox("ESP32 Serial Port COM Selection", available_ports, key="main_serial_port", label_visibility="collapsed")
+                st.markdown("<div style='font-size:0.75rem; color:#FF5C7A; margin-bottom:0.5rem;'>⚠️ No serial ports found. Plug in ESP32.</div>", unsafe_allow_html=True)
+                selected_port = None
+            else:
+                selected_port = st.selectbox("ESP32 Serial Port COM Selection", available_ports, key="main_serial_port", label_visibility="collapsed")
             
             col_conn1, col_conn2 = st.columns(2)
             with col_conn1:
-                st.button("Connect USB", key="main_connect_btn", on_click=handle_connect_usb)
+                st.button("Connect USB", key="main_connect_btn", on_click=handle_connect_usb, disabled=(not available_ports))
             with col_conn2:
                 st.button("Disconnect", key="main_disconnect_btn", on_click=handle_disconnect_usb)
                 
@@ -1178,25 +1193,37 @@ with ws_overview:
             st.button("🟢 Normal", key="main_normal_btn", on_click=handle_normal_injection)
         with col_lbl2:
             st.button("🔴 Anomaly", key="main_anomaly_btn", on_click=handle_anomaly_injection)
-            
-        st.markdown("<div style='border-bottom: 1px solid rgba(255,255,255,0.04); margin: 1rem 0;'></div>", unsafe_allow_html=True)
-        st.markdown("<div style='font-size: 0.65rem; font-weight: 500; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 0.5rem;'>Drift Generation</div>", unsafe_allow_html=True)
-        
-        _toggle_live = st.toggle("Live Telemetry Stream", key="main_live_stream_toggle")
-        if not serial_connected:
-            st.toggle("Induce Vibration Fault", key="fault_toggle", on_change=_sync_fault_toggle)
 
     # Telemetry Log
-    timestamp = time.strftime("%H:%M:%S")
-    serial_status_text = "CONNECTED" if serial_connected else "SIMULATED STREAM"
-    log_text = (
-        f"[{timestamp}] [INIT] ESP32 Dual-Core LX6 initialized (200KB SRAM budget)\n"
-        f"[{timestamp}] [IMU] Sampling 3-axis acceleration magnitude at 50Hz (20ms interval)\n"
-        f"[{timestamp}] [TELEMETRY] #{int(latest_data['Count'])} | ||a||: {latest_data['Magnitude_g']:.3f}g | Pred: {latest_data['Pred_Name']} ({latest_data['Confidence']}%)\n"
-        f"[{timestamp}] [MEMORY] Static RAM: {sram_kb} KB (Weights: 5.88KB, Act: 3.52KB, 4-bit Replay: 10.21KB, Stacks: 14KB)\n"
-        f"[{timestamp}] [PERF] Latency: {latest_data['Latency_ms']} ms | Replay Buffer: {int(latest_data['Buffer_Count'])}/50\n"
-        f"[{timestamp}] [STATUS] Serial Bridge Status: {serial_status_text}"
-    )
+    def format_log_to_html(log_line):
+        import html
+        import re
+        escaped = html.escape(log_line)
+        tags_and_colors = {
+            "[TinyML]": "#00FF9D",
+            "[IMU]": "#FF79C6",
+            "[Memory]": "#8B5CF6",
+            "[ERROR]": "#FF5C7A",
+            "[Error]": "#FF5C7A",
+            "[Warning]": "#FFC857",
+            "[ESP32]": "#00E5FF",
+            "[Replay]": "#8B5CF6",
+            "[Info]": "#00FF9D",
+        }
+        for tag, color in tags_and_colors.items():
+            if tag in escaped:
+                escaped = escaped.replace(tag, f'<span style="color: {color}; font-weight: bold;">{tag}</span>')
+        escaped = re.sub(r'^(\[[0-9:\.]+\])', r'<span style="color: rgba(255, 255, 255, 0.45);">\1</span>', escaped)
+        return escaped
+
+    if serial_connected:
+        logs_list = st.session_state.serial_bridge.serial_logs
+        if logs_list:
+            logs_html = "<br>".join([format_log_to_html(line) for line in logs_list])
+        else:
+            logs_html = '<span style="color: rgba(255, 255, 255, 0.45);">Connected to serial port. Listening for ESP32 messages...</span>'
+    else:
+        logs_html = '<span style="color: #FF5C7A; font-weight: bold;">[Device Disconnected]</span> <span style="color: rgba(255, 255, 255, 0.45);">UART offline. Waiting for connection...</span>'
 
     st.markdown(f"""
     <div style='font-size: 0.72rem; font-weight: 500; color: rgba(255, 255, 255, 0.3); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 1.5rem; margin-bottom: 0.75rem;'>On-Device Telemetry Log</div>
@@ -1209,10 +1236,21 @@ with ws_overview:
             </div>
             <div class="terminal-title">esp32-serial-uart0 --baud 115200</div>
         </div>
-        <div class="terminal-body">
-            <pre>{log_text}</pre>
+        <div class="terminal-body" style="height: 300px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; line-height: 1.5; color: rgba(255, 255, 255, 0.85); background: #080c14; padding: 1rem; border-radius: 0 0 12px 12px;">
+            <div id="terminal-content">
+                {logs_html}
+            </div>
         </div>
     </div>
+    <script>
+        var terminal = document.querySelector('.terminal-body');
+        if (terminal) {{
+            var isAtBottom = terminal.scrollHeight - terminal.clientHeight - terminal.scrollTop < 30;
+            if (isAtBottom || terminal.scrollTop === 0) {{
+                terminal.scrollTop = terminal.scrollHeight;
+            }}
+        }}
+    </script>
     """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------
@@ -1275,15 +1313,20 @@ with ws_continual:
 # WORKSPACE 3: REPLAY BUFFER
 # ---------------------------------------------------------------------
 with ws_replay:
-    buf_count = int(latest_data['Buffer_Count'])
-    buf_percent = min(round((buf_count / 50.0) * 100, 1), 100.0)
+    if latest_data is not None:
+        buf_count = int(latest_data['Buffer_Count'])
+        buf_percent = min(round((buf_count / 50.0) * 100, 1), 100.0)
+        buf_count_str = f"{buf_count}"
+    else:
+        buf_count_str = "Unavailable"
+        buf_percent = 0.0
 
     st.markdown(f"""
     <div class="hud-panel">
         <div class="hud-card">
             <div class="hud-label">Reservoir Capacity</div>
             <div class="hud-value-row">
-                <span class="hud-val">{buf_count}</span>
+                <span class="hud-val">{buf_count_str}</span>
                 <span class="hud-unit">/ 50</span>
             </div>
             <div class="hud-progress-bar">
@@ -1322,16 +1365,26 @@ with ws_replay:
     
     # Generate representative replay slots matrix
     slots_data = []
-    for idx in range(min(buf_count, 15)):
+    buf_count_raw = 0
+    if latest_data is not None:
+        try:
+            buf_count_raw = int(latest_data['Buffer_Count'])
+        except Exception:
+            buf_count_raw = 0
+
+    for idx in range(min(buf_count_raw, 15)):
         slots_data.append({
             "Slot ID": f"0x{idx:02X}",
             "Sample Class": "NORMAL (0)" if idx % 3 != 0 else "ANOMALY (1)",
             "Quantization Scale": "0.00392",
             "Zero Point": "128",
-            "Packed Nibbles": f"0x{random.randint(10,99)}A...0x{random.randint(10,99)}F",
+            "Packed Nibbles": "0x3A4B...0xC9FF",
             "RAM Address": hex(0x3FFB0000 + idx * 200)
         })
-    st.dataframe(pd.DataFrame(slots_data), width='stretch', hide_index=True)
+    if slots_data:
+        st.dataframe(pd.DataFrame(slots_data), width='stretch', hide_index=True)
+    else:
+        st.markdown("<div style='font-size:0.8rem; color:rgba(255,255,255,0.45); text-align:center; padding:1.5rem;'>Replay buffer empty or device disconnected.</div>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------
 # WORKSPACE 4: RUNTIME
