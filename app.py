@@ -1332,43 +1332,11 @@ with ws_overview:
         escaped = re.sub(r'^(\[[0-9:\.]+\])', r'<span style="color: rgba(255, 255, 255, 0.45);">\1</span>', escaped)
         return f'<div style="font-family:\'JetBrains Mono\', monospace; font-size:0.8rem; margin-bottom:0.25rem; white-space:pre-wrap; line-height: 1.4; color: rgba(255,255,255,0.85);">{escaped}</div>'
 
-    # Terminal & Console Controls Header
-    st.markdown("<div style='border-bottom: 1px solid rgba(255,255,255,0.04); margin: 1.5rem 0 1rem 0;'></div>", unsafe_allow_html=True)
-    
-    col_ctrl1, col_ctrl2 = st.columns([1.5, 2.5])
-    with col_ctrl1:
-        log_mode = st.radio("Log Mode", ["Parsed View", "Raw Serial"], horizontal=True, label_visibility="collapsed", key="log_view_mode")
-    with col_ctrl2:
-        search_query = st.text_input("🔍 Search logs...", value="", label_visibility="collapsed", key="console_search_query", placeholder="Search logs...")
-        
-    col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
-    
     if 'console_paused' not in st.session_state:
         st.session_state.console_paused = False
     if 'paused_logs' not in st.session_state:
         st.session_state.paused_logs = []
         
-    with col_btn1:
-        if st.session_state.console_paused:
-            if st.button("▶️ Resume", key="pause_resume_btn", use_container_width=True):
-                st.session_state.console_paused = False
-                st.rerun()
-        else:
-            if st.button("⏸️ Pause", key="pause_resume_btn", use_container_width=True):
-                st.session_state.console_paused = True
-                if 'serial_bridge' in st.session_state:
-                    st.session_state.paused_logs = list(st.session_state.serial_bridge.serial_logs)
-                st.rerun()
-                
-    with col_btn2:
-        if st.button("🧹 Clear", key="clear_logs_btn", use_container_width=True):
-            if 'serial_bridge' in st.session_state:
-                with st.session_state.serial_bridge.lock:
-                    st.session_state.serial_bridge.serial_logs = []
-            st.session_state.paused_logs = []
-            st.toast("Console cleared", icon="🧹")
-            st.rerun()
-            
     if 'serial_bridge' in st.session_state:
         if st.session_state.console_paused:
             logs_list = list(st.session_state.paused_logs)
@@ -1376,33 +1344,240 @@ with ws_overview:
             logs_list = list(st.session_state.serial_bridge.serial_logs)
     else:
         logs_list = []
+
+    if 'active_log_mode' not in st.session_state:
+        st.session_state.active_log_mode = "Parsed View"
+
+    st.markdown("""
+    <style>
+    /* 1. Style the parent horizontal block containing the columns as the integrated terminal header */
+    div[data-testid="stHorizontalBlock"]:has(div.terminal-header-trigger) {{
+        background: #0d1117 !important;
+        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+        border-radius: 12px 12px 0 0 !important;
+        padding: 6px 12px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        border-bottom: none !important;
+        margin-top: 1.5rem !important;
+        min-height: 42px !important;
+    }}
+    
+    /* Remove vertical gap between title bar block and terminal body */
+    div[data-testid="stVerticalBlock"]:has(div.terminal-header-trigger) {{
+        gap: 0px !important;
+    }}
+    
+    /* 2. Segmented control columns row container */
+    div[data-testid="stHorizontalBlock"]:has(div.segmented-btn-container-trigger) {{
+        background: rgba(255, 255, 255, 0.02) !important;
+        border: 1px solid rgba(255, 255, 255, 0.06) !important;
+        border-radius: 30px !important;
+        padding: 1px !important;
+        display: flex !important;
+        gap: 0px !important;
+        align-items: center !important;
+        justify-content: center !important;
+        height: 28px !important;
+        width: 140px !important;
+    }}
+    
+    div[data-testid="stHorizontalBlock"]:has(div.segmented-btn-container-trigger) div[data-testid="column"] {{
+        padding: 0px !important;
+        margin: 0px !important;
+        flex: 1 !important;
+    }}
+    
+    /* Segmented buttons styling */
+    div[data-testid="stHorizontalBlock"]:has(div.segmented-btn-container-trigger) button {{
+        background: transparent !important;
+        border: none !important;
+        color: rgba(255, 255, 255, 0.45) !important;
+        border-radius: 30px !important;
+        font-size: 0.72rem !important;
+        font-family: 'Outfit', sans-serif !important;
+        cursor: pointer !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        padding: 2px 10px !important;
+        height: 24px !important;
+        line-height: 1 !important;
+        font-weight: 500 !important;
+        margin: 0px !important;
+        box-shadow: none !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }}
+    
+    div[data-testid="stHorizontalBlock"]:has(div.segmented-btn-container-trigger) button:hover {{
+        color: #ffffff !important;
+    }}
+    
+    /* Active button state */
+    div[data-testid="stHorizontalBlock"]:has(div.segmented-btn-container-trigger) button[class*="primary"] {{
+        background: rgba(0, 229, 255, 0.12) !important;
+        border: 1px solid rgba(0, 229, 255, 0.25) !important;
+        color: #00E5FF !important;
+        font-weight: 700 !important;
+        box-shadow: 0 2px 6px rgba(0, 229, 255, 0.1) !important;
+    }}
+    
+    /* 3. Search field input styling */
+    div[data-testid="stTextInput"]:has(input[placeholder*="Search"]) {{
+        margin: 0px !important;
+        padding: 0px !important;
+    }}
+    div[data-testid="stTextInput"]:has(input[placeholder*="Search"]) label {{
+        display: none !important;
+    }}
+    div[data-testid="stTextInput"]:has(input[placeholder*="Search"]) input {{
+        border-radius: 30px !important;
+        background: rgba(255, 255, 255, 0.02) !important;
+        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+        color: #ffffff !important;
+        font-size: 0.72rem !important;
+        height: 28px !important;
+        padding-left: 28px !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        width: 140px !important;
+    }}
+    div[data-testid="stTextInput"]:has(input[placeholder*="Search"]) input:focus {{
+        border-color: #00E5FF !important;
+        box-shadow: 0 0 8px rgba(0, 229, 255, 0.2) !important;
+        background: rgba(255, 255, 255, 0.04) !important;
+        width: 170px !important;
+    }}
+    
+    /* 4. Toolbar buttons styling */
+    div[data-testid="column"]:has(button[key*="pause_btn"]),
+    div[data-testid="column"]:has(button[key*="clear_logs_btn"]),
+    div[data-testid="column"]:has(button[key*="download_logs_btn"]) {{
+        width: 32px !important;
+        flex: none !important;
+    }}
+    
+    div[data-testid="stHorizontalBlock"]:has(button[key*="pause_btn"]) {{
+        gap: 4px !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        display: flex !important;
+    }}
+    
+    div[data-testid="stHorizontalBlock"]:has(button[key*="pause_btn"]) button {{
+        min-width: 0px !important;
+        width: 28px !important;
+        height: 28px !important;
+        padding: 0px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 6px !important;
+        background: transparent !important;
+        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+        color: rgba(255, 255, 255, 0.6) !important;
+        font-size: 0.85rem !important;
+        transition: all 0.2s ease !important;
+        margin: 0px !important;
+        box-shadow: none !important;
+    }}
+    
+    div[data-testid="stHorizontalBlock"]:has(button[key*="pause_btn"]) button:hover {{
+        background: rgba(0, 229, 255, 0.08) !important;
+        border-color: #00E5FF !important;
+        color: #00E5FF !important;
+    }}
+    
+    /* Style Copy button to match */
+    button[title="Copy logs"]:hover {{
+        background: rgba(0, 229, 255, 0.08) !important;
+        border-color: #00E5FF !important;
+        color: #00E5FF !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+    col_left, col_seg, col_search, col_toolbar = st.columns([2.6, 1.6, 2.3, 1.5])
+    
+    with col_left:
+        st.markdown(f"""
+        <div class="terminal-header-trigger" style="display: flex; align-items: center; gap: 8px; height: 100%;">
+            <div style="display: flex; gap: 6px;">
+                <span style="width: 10px; height: 10px; background: #FF5C7A; border-radius: 50%; display: inline-block;"></span>
+                <span style="width: 10px; height: 10px; background: #FFC857; border-radius: 50%; display: inline-block;"></span>
+                <span style="width: 10px; height: 10px; background: #00FF9D; border-radius: 50%; display: inline-block;"></span>
+            </div>
+            <span style="font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: 600; color: rgba(255,255,255,0.75); margin-left: 6px; white-space: nowrap;">On-Device Telemetry Log</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with col_seg:
+        st.markdown('<div class="segmented-btn-container-trigger"></div>', unsafe_allow_html=True)
+        col_seg1, col_seg2 = st.columns(2)
+        with col_seg1:
+            if st.button("Parsed", key="seg_btn_parsed", use_container_width=True, type="primary" if st.session_state.active_log_mode == "Parsed View" else "secondary"):
+                st.session_state.active_log_mode = "Parsed View"
+                st.rerun()
+        with col_seg2:
+            if st.button("Raw", key="seg_btn_raw", use_container_width=True, type="primary" if st.session_state.active_log_mode == "Raw Serial" else "secondary"):
+                st.session_state.active_log_mode = "Raw Serial"
+                st.rerun()
+                
+    with col_search:
+        search_query = st.text_input("🔍 Search logs...", value="", label_visibility="collapsed", key="console_search_query", placeholder="Search logs...")
         
     if search_query:
         logs_list = [line for line in logs_list if search_query.lower() in line.lower()]
         
-    with col_btn3:
-        copy_btn_html = """
-        <button onclick="navigator.clipboard.writeText(document.getElementById('terminal-content').innerText); alert('Logs copied to clipboard!');" 
-        style="width: 100%; height: 38px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #ffffff; font-size: 0.85rem; font-family: 'Outfit', sans-serif; cursor: pointer; transition: all 0.2s;">
-            📋 Copy Logs
-        </button>
-        """
-        st.markdown(copy_btn_html, unsafe_allow_html=True)
+    logs_txt = "\n".join(logs_list)
         
-    with col_btn4:
-        logs_txt = "\n".join(logs_list)
-        st.download_button(
-            label="📥 Download",
-            data=logs_txt,
-            file_name=f"esp32_serial_log_{time.strftime('%Y%m%d_%H%M%S')}.txt",
-            mime="text/plain",
-            key="download_logs_btn",
-            use_container_width=True
-        )
+    with col_toolbar:
+        col_btn_pause, col_btn_clear, col_btn_copy, col_btn_dl = st.columns(4)
+        
+        with col_btn_pause:
+            if st.session_state.console_paused:
+                if st.button("▶", key="pause_btn", help="Resume console updates", use_container_width=True):
+                    st.session_state.console_paused = False
+                    st.rerun()
+            else:
+                if st.button("⏸", key="pause_btn", help="Pause console updates", use_container_width=True):
+                    st.session_state.console_paused = True
+                    if 'serial_bridge' in st.session_state:
+                        st.session_state.paused_logs = list(st.session_state.serial_bridge.serial_logs)
+                    st.rerun()
+                    
+        with col_btn_clear:
+            if st.button("🧹", key="clear_logs_btn", help="Clear console", use_container_width=True):
+                if 'serial_bridge' in st.session_state:
+                    with st.session_state.serial_bridge.lock:
+                        st.session_state.serial_bridge.serial_logs = []
+                st.session_state.paused_logs = []
+                st.toast("Console cleared", icon="🧹")
+                st.rerun()
+                
+        with col_btn_copy:
+            st.markdown("""
+            <button onclick="navigator.clipboard.writeText(document.getElementById('terminal-content').innerText); alert('Logs copied to clipboard!');" 
+                title="Copy logs"
+                style="width: 28px; height: 28px; background: transparent; border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; color: rgba(255,255,255,0.7); font-size: 0.85rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin: 0px; box-sizing: border-box;">
+                📋
+            </button>
+            """, unsafe_allow_html=True)
+            
+        with col_btn_dl:
+            st.download_button(
+                label="⬇",
+                data=logs_txt,
+                file_name=f"esp32_serial_log_{time.strftime('%Y%m%d_%H%M%S')}.txt",
+                mime="text/plain",
+                key="download_logs_btn",
+                help="Download logs",
+                use_container_width=True
+            )
 
     if serial_connected:
         if logs_list:
-            if log_mode == "Parsed View":
+            if st.session_state.active_log_mode == "Parsed View":
                 logs_html = "".join([format_log_to_parsed_html(line) for line in logs_list])
             else:
                 logs_html = "".join([format_log_to_raw_html(line) for line in logs_list])
@@ -1412,17 +1587,8 @@ with ws_overview:
         logs_html = '<span style="color: #FF5C7A; font-weight: bold; font-family: \'JetBrains Mono\', monospace;">[Device Disconnected]</span> <span style="color: rgba(255, 255, 255, 0.45); font-family: \'JetBrains Mono\', monospace;">UART offline. Waiting for connection...</span>'
 
     st.markdown(f"""
-    <div style='font-size: 0.72rem; font-weight: 500; color: rgba(255, 255, 255, 0.3); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 1.5rem; margin-bottom: 0.75rem;'>On-Device Telemetry Log</div>
-    <div class="workspace-panel terminal-panel" style="position: relative;">
-        <div class="terminal-header">
-            <div class="terminal-dots">
-                <span class="terminal-dot dot-red"></span>
-                <span class="terminal-dot dot-yellow"></span>
-                <span class="terminal-dot dot-green"></span>
-            </div>
-            <div class="terminal-title">idf.py -p {conn_info['port']} -b 115200 monitor</div>
-        </div>
-        <div class="terminal-body" style="height: 320px; overflow-y: auto; background: #080c14; padding: 1rem; border-radius: 0 0 12px 12px;">
+    <div class="workspace-panel terminal-panel-body" style="position: relative;">
+        <div class="terminal-body" style="height: 320px; overflow-y: auto; background: #080c14; padding: 1rem; border-radius: 0 0 12px 12px; border: 1px solid rgba(255, 255, 255, 0.05); border-top: none;">
             <div id="terminal-content">
                 {logs_html}
             </div>
