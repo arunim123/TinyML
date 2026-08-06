@@ -1371,579 +1371,530 @@ with ws_overview:
     logs_json = json.dumps(logs_list)
 
     # Style block for developer terminal
-    st.markdown("""
-    <style>
-    /* Hide the hidden control container */
-    div[data-testid="column"]:has(div.hidden-control-container) {
-        display: none !important;
-        height: 0px !important;
-        margin: 0px !important;
-        padding: 0px !important;
-    }
-    
-    .developer-terminal {
-        background: #080c14;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 12px;
-        overflow: hidden;
-        margin-top: 1.5rem;
-        margin-bottom: 2rem;
-        font-family: 'JetBrains Mono', monospace;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-        width: 100%;
-        display: flex;
-        flex-direction: column;
-    }
+    # Style block and html for developer terminal
+    terminal_template = """<style>
+/* Hide the hidden control container */
+div[data-testid="column"]:has(div.hidden-control-container) {
+    display: none !important;
+    height: 0px !important;
+    margin: 0px !important;
+    padding: 0px !important;
+}
 
-    .dev-terminal-header {
-        background: #0d1117;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        height: 44px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 16px;
-        user-select: none;
-    }
+.developer-terminal {
+    background: #080c14;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 1.5rem;
+    margin-bottom: 2rem;
+    font-family: 'JetBrains Mono', monospace;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
 
-    .header-left {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
+.dev-terminal-header {
+    background: #0d1117;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    user-select: none;
+}
 
-    .terminal-dots {
-        display: flex;
-        gap: 6px;
-    }
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
 
-    .terminal-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        display: inline-block;
-    }
+.terminal-dots {
+    display: flex;
+    gap: 6px;
+}
 
-    .dot-red { background: #FF5C7A; }
-    .dot-yellow { background: #FFC857; }
-    .dot-green { background: #00FF9D; }
+.terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
 
-    .terminal-title {
-        font-family: 'Outfit', sans-serif;
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.75);
-        letter-spacing: 0.02em;
-    }
+.dot-red { background: #FF5C7A; }
+.dot-yellow { background: #FFC857; }
+.dot-green { background: #00FF9D; }
 
-    .header-right {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
+.terminal-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
+    letter-spacing: 0.02em;
+}
 
-    /* Segmented toggle styling */
-    .segmented-control {
-        position: relative;
-        display: flex;
-        background: rgba(255, 255, 255, 0.02);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 6px;
-        padding: 2px;
-        user-select: none;
-        width: 120px;
-        height: 28px;
-        align-items: center;
-    }
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
 
-    .segment-btn {
-        flex: 1;
-        font-size: 0.7rem;
-        font-weight: 500;
-        color: rgba(255, 255, 255, 0.45);
-        text-align: center;
-        cursor: pointer;
-        z-index: 2;
-        transition: color 0.2s ease;
-        line-height: 22px;
-        font-family: 'Outfit', sans-serif;
-    }
+/* Segmented toggle styling */
+.segmented-control {
+    position: relative;
+    display: flex;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 2px;
+    user-select: none;
+    width: 120px;
+    height: 28px;
+    align-items: center;
+}
 
-    .segment-btn.active {
-        color: #ffffff;
-    }
+.segment-btn {
+    flex: 1;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.45);
+    text-align: center;
+    cursor: pointer;
+    z-index: 2;
+    transition: color 0.2s ease;
+    line-height: 22px;
+    font-family: 'Outfit', sans-serif;
+}
 
-    .segmented-glider {
-        position: absolute;
-        height: 22px;
-        width: 57px; /* (120 - 4 - 2)/2 */
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 4px;
-        z-index: 1;
-        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        transform: translateX(0);
-        left: 2px;
-    }
+.segment-btn.active {
+    color: #ffffff;
+}
 
-    /* Search Box style */
-    .search-container {
-        position: relative;
-        display: flex;
-        align-items: center;
-    }
+.segmented-glider {
+    position: absolute;
+    height: 22px;
+    width: 57px; /* (120 - 4 - 2)/2 */
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    z-index: 1;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateX(0);
+    left: 2px;
+}
 
-    .search-icon {
-        position: absolute;
-        left: 10px;
-        color: rgba(255, 255, 255, 0.35);
-        pointer-events: none;
-        transition: color 0.2s ease;
-    }
+/* Search Box style */
+.search-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
 
-    #dev-search-input {
-        background: rgba(255, 255, 255, 0.02);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 30px;
-        padding: 4px 10px 4px 28px;
-        color: #ffffff;
-        font-size: 0.72rem;
-        font-family: 'Outfit', sans-serif;
-        outline: none;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        width: 120px;
-        height: 28px;
-        box-sizing: border-box;
-    }
+.search-icon {
+    position: absolute;
+    left: 10px;
+    color: rgba(255, 255, 255, 0.35);
+    pointer-events: none;
+    transition: color 0.2s ease;
+}
 
-    #dev-search-input:focus {
-        width: 160px;
-        border-color: #00E5FF;
-        background: rgba(255, 255, 255, 0.04);
-        box-shadow: 0 0 10px rgba(0, 229, 255, 0.15);
-    }
+#dev-search-input {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 30px;
+    padding: 4px 10px 4px 28px;
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-family: 'Outfit', sans-serif;
+    outline: none;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    width: 120px;
+    height: 28px;
+    box-sizing: border-box;
+}
 
-    #dev-search-input:focus + .search-icon {
-        color: #00E5FF;
-    }
+#dev-search-input:focus {
+    width: 160px;
+    border-color: #00E5FF;
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.15);
+}
 
-    /* Toolbar Style */
-    .terminal-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
+#dev-search-input:focus + .search-icon {
+    color: #00E5FF;
+}
 
-    .toolbar-btn {
-        background: transparent;
-        border: 1px solid rgba(255, 255, 255, 0.04);
-        border-radius: 6px;
-        width: 28px;
-        height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: rgba(255, 255, 255, 0.55);
-        cursor: pointer;
-        transition: all 0.2s ease;
-        padding: 0;
-        box-sizing: border-box;
-    }
+/* Toolbar Style */
+.terminal-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
 
-    .toolbar-btn:hover {
-        background: rgba(255, 255, 255, 0.06);
-        border-color: rgba(255, 255, 255, 0.15);
-        color: #ffffff;
-    }
+.toolbar-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.55);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-    /* Custom Tooltip helper styling */
-    .tooltip-container {
-        position: relative;
-    }
+.toolbar-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+}
 
-    .tooltip-text {
-        visibility: hidden;
-        background-color: #0d1117;
-        color: #fff;
-        text-align: center;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 4px;
-        padding: 4px 8px;
-        position: absolute;
-        z-index: 10000;
-        bottom: -32px;
-        left: 50%;
-        transform: translateX(-50%);
-        font-size: 0.65rem;
-        white-space: nowrap;
-        opacity: 0;
-        transition: opacity 0.15s ease;
-        font-family: 'Outfit', sans-serif;
-    }
+/* Terminal Body Style */
+.dev-terminal-body {
+    height: 400px;
+    overflow-y: auto;
+    padding: 12px;
+    position: relative;
+    background: #080c14;
+    box-sizing: border-box;
+}
 
-    .tooltip-container:hover .tooltip-text {
-        visibility: visible;
-        opacity: 1;
-    }
+#dev-terminal-content {
+    line-height: 1.5;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-family: 'JetBrains Mono', monospace;
+}
 
-    /* Terminal Body Style */
-    .dev-terminal-body {
-        height: 400px; /* Enhanced vertical height */
-        overflow-y: auto;
-        padding: 12px;
-        position: relative;
-        background: #080c14;
-        box-sizing: border-box;
-    }
+/* Jump to latest button */
+#dev-jump-to-latest-btn {
+    position: absolute;
+    bottom: 16px;
+    right: 24px;
+    background: #00E5FF;
+    color: #080c14;
+    border: none;
+    border-radius: 30px;
+    padding: 6px 14px;
+    font-size: 0.72rem;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 999;
+    box-shadow: 0 4px 15px rgba(0, 229, 255, 0.35);
+    font-family: 'Outfit', sans-serif;
+    transition: all 0.2s ease;
+}
 
-    #dev-terminal-content {
-        line-height: 1.5;
-        font-size: 0.72rem; /* Compact professional font size */
-        color: rgba(255, 255, 255, 0.85);
-        font-family: 'JetBrains Mono', monospace;
-    }
+#dev-jump-to-latest-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 229, 255, 0.55);
+}
+</style>
 
-    /* Jump to latest button */
-    #dev-jump-to-latest-btn {
-        position: absolute;
-        bottom: 16px;
-        right: 24px;
-        background: #00E5FF;
-        color: #080c14;
-        border: none;
-        border-radius: 30px;
-        padding: 6px 14px;
-        font-size: 0.72rem;
-        font-weight: bold;
-        cursor: pointer;
-        z-index: 999;
-        box-shadow: 0 4px 15px rgba(0, 229, 255, 0.35);
-        font-family: 'Outfit', sans-serif;
-        transition: all 0.2s ease;
-    }
-
-    #dev-jump-to-latest-btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(0, 229, 255, 0.55);
-    }
-    </style>
-
-    <div class="developer-terminal">
-        <div class="dev-terminal-header">
-            <!-- Left Header -->
-            <div class="header-left">
-                <div class="terminal-dots">
-                    <span class="terminal-dot dot-red"></span>
-                    <span class="terminal-dot dot-yellow"></span>
-                    <span class="terminal-dot dot-green"></span>
-                </div>
-                <span class="terminal-title">On-Device Telemetry Log</span>
+<div class="developer-terminal">
+    <div class="dev-terminal-header">
+        <!-- Left Header -->
+        <div class="header-left">
+            <div class="terminal-dots">
+                <span class="terminal-dot dot-red"></span>
+                <span class="terminal-dot dot-yellow"></span>
+                <span class="terminal-dot dot-green"></span>
             </div>
-            
-            <!-- Right Header Controls -->
-            <div class="header-right">
-                <!-- Segmented Control -->
-                <div class="segmented-control">
-                    <div class="segmented-glider"></div>
-                    <div id="btn-parsed" class="segment-btn active" onclick="setLogMode('parsed')">Parsed</div>
-                    <div id="btn-raw" class="segment-btn" onclick="setLogMode('raw')">Raw</div>
-                </div>
-                
-                <!-- Search container -->
-                <div class="search-container">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                    <input type="text" id="dev-search-input" oninput="handleSearch(this.value)" placeholder="Search logs..." />
-                </div>
-                
-                <!-- Toolbar buttons -->
-                <div class="terminal-toolbar">
-                    <button id="btn-pause" onclick="togglePause()" class="toolbar-btn" title="Pause logs">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-                    </button>
-                    
-                    <button onclick="clearLogs()" class="toolbar-btn" title="Clear console">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                    </button>
-                    
-                    <button onclick="copyLogs()" class="toolbar-btn" title="Copy logs">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                    </button>
-                    
-                    <button onclick="downloadLogs()" class="toolbar-btn" title="Download logs">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    </button>
-                </div>
-            </div>
+            <span class="terminal-title">On-Device Telemetry Log</span>
         </div>
         
-        <!-- Viewport log body -->
-        <div class="dev-terminal-body">
-            <div id="dev-terminal-content"></div>
-            <button id="dev-jump-to-latest-btn" onclick="scrollToLatest()" style="display: none;">
-                ↓ Jump to Latest
-            </button>
+        <!-- Right Header Controls -->
+        <div class="header-right">
+            <!-- Segmented Control -->
+            <div class="segmented-control">
+                <div class="segmented-glider"></div>
+                <div id="btn-parsed" class="segment-btn active" onclick="setLogMode('parsed')">Parsed</div>
+                <div id="btn-raw" class="segment-btn" onclick="setLogMode('raw')">Raw</div>
+            </div>
+            
+            <!-- Search container -->
+            <div class="search-container">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="dev-search-input" oninput="handleSearch(this.value)" placeholder="Search logs..." />
+            </div>
+            
+            <!-- Toolbar buttons -->
+            <div class="terminal-toolbar">
+                <button id="btn-pause" onclick="togglePause()" class="toolbar-btn" title="Pause logs">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                </button>
+                
+                <button onclick="clearLogs()" class="toolbar-btn" title="Clear console">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                </button>
+                
+                <button onclick="copyLogs()" class="toolbar-btn" title="Copy logs">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                </button>
+                
+                <button onclick="downloadLogs()" class="toolbar-btn" title="Download logs">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                </button>
+            </div>
         </div>
     </div>
+    
+    <!-- Viewport log body -->
+    <div class="dev-terminal-body">
+        <div id="dev-terminal-content"></div>
+        <button id="dev-jump-to-latest-btn" onclick="scrollToLatest()" style="display: none;">
+            ↓ Jump to Latest
+        </button>
+    </div>
+</div>
 
-    <script>
-        (function() {{
-            var rawLogs = {logs_json};
-            
-            if (window.terminalLogMode === undefined) window.terminalLogMode = 'parsed';
-            if (window.terminalSearchQuery === undefined) window.terminalSearchQuery = '';
-            if (window.terminalPaused === undefined) window.terminalPaused = false;
-            if (window.terminalAutoScroll === undefined) window.terminalAutoScroll = true;
-            
-            var container = document.getElementById('dev-terminal-content');
-            var terminalBody = document.querySelector('.dev-terminal-body');
-            var jumpBtn = document.getElementById('dev-jump-to-latest-btn');
-            var searchInput = document.getElementById('dev-search-input');
-            var pauseBtn = document.getElementById('btn-pause');
-            
-            // Sync search value input
-            if (searchInput) searchInput.value = window.terminalSearchQuery;
-            
-            // Set segmented control active state glider
-            var glider = document.querySelector('.segmented-glider');
-            var parsedBtn = document.getElementById('btn-parsed');
-            var rawBtn = document.getElementById('btn-raw');
-            if (glider && parsedBtn && rawBtn) {{
-                if (window.terminalLogMode === 'parsed') {{
+<script>
+    (function() {
+        var rawLogs = {logs_json};
+        
+        if (window.terminalLogMode === undefined) window.terminalLogMode = 'parsed';
+        if (window.terminalSearchQuery === undefined) window.terminalSearchQuery = '';
+        if (window.terminalPaused === undefined) window.terminalPaused = false;
+        if (window.terminalAutoScroll === undefined) window.terminalAutoScroll = true;
+        
+        var container = document.getElementById('dev-terminal-content');
+        var terminalBody = document.querySelector('.dev-terminal-body');
+        var jumpBtn = document.getElementById('dev-jump-to-latest-btn');
+        var searchInput = document.getElementById('dev-search-input');
+        var pauseBtn = document.getElementById('btn-pause');
+        
+        // Sync search value input
+        if (searchInput) searchInput.value = window.terminalSearchQuery;
+        
+        // Set segmented control active state glider
+        var glider = document.querySelector('.segmented-glider');
+        var parsedBtn = document.getElementById('btn-parsed');
+        var rawBtn = document.getElementById('btn-raw');
+        if (glider && parsedBtn && rawBtn) {
+            if (window.terminalLogMode === 'parsed') {
+                glider.style.transform = 'translateX(0px)';
+                parsedBtn.classList.add('active');
+                rawBtn.classList.remove('active');
+            } else {
+                glider.style.transform = 'translateX(59px)';
+                rawBtn.classList.add('active');
+                parsedBtn.classList.remove('active');
+            }
+        }
+        
+        // Sync pause button icon
+        if (pauseBtn) {
+            if (window.terminalPaused) {
+                pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+                pauseBtn.setAttribute('title', 'Resume logs');
+            } else {
+                pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+                pauseBtn.setAttribute('title', 'Pause logs');
+            }
+        }
+        
+        window.setLogMode = function(mode) {
+            window.terminalLogMode = mode;
+            if (glider && parsedBtn && rawBtn) {
+                if (mode === 'parsed') {
                     glider.style.transform = 'translateX(0px)';
                     parsedBtn.classList.add('active');
                     rawBtn.classList.remove('active');
-                }} else {{
+                } else {
                     glider.style.transform = 'translateX(59px)';
                     rawBtn.classList.add('active');
                     parsedBtn.classList.remove('active');
-                }}
-            }}
+                }
+            }
+            renderLogs();
+        };
+        
+        window.handleSearch = function(val) {
+            window.terminalSearchQuery = val.toLowerCase();
+            renderLogs();
+        };
+        
+        window.togglePause = function() {
+            window.terminalPaused = !window.terminalPaused;
+            if (window.terminalPaused) {
+                window.frozenLogs = [...rawLogs];
+            }
             
-            // Sync pause button icon
-            if (pauseBtn) {{
-                if (window.terminalPaused) {{
+            if (pauseBtn) {
+                if (window.terminalPaused) {
                     pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
                     pauseBtn.setAttribute('title', 'Resume logs');
-                }} else {{
+                } else {
                     pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
                     pauseBtn.setAttribute('title', 'Pause logs');
-                }}
-            }}
-            
-            window.setLogMode = function(mode) {{
-                window.terminalLogMode = mode;
-                if (glider && parsedBtn && rawBtn) {{
-                    if (mode === 'parsed') {{
-                        glider.style.transform = 'translateX(0px)';
-                        parsedBtn.classList.add('active');
-                        rawBtn.classList.remove('active');
-                    }} else {{
-                        glider.style.transform = 'translateX(59px)';
-                        rawBtn.classList.add('active');
-                        parsedBtn.classList.remove('active');
-                    }}
-                }}
+                }
+            }
+            renderLogs();
+        };
+        
+        window.clearLogs = function() {
+            var pythonClearBtn = parent.document.querySelector('button[key="hidden_clear_logs_btn"]');
+            if (pythonClearBtn) {
+                pythonClearBtn.click();
+            } else {
+                window.frozenLogs = [];
+                rawLogs = [];
                 renderLogs();
-            }};
+            }
+        };
+        
+        window.copyLogs = function() {
+            if (container) {
+                var tempElement = document.createElement('textarea');
+                tempElement.value = container.innerText;
+                document.body.appendChild(tempElement);
+                tempElement.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempElement);
+                alert('Logs copied to clipboard!');
+            }
+        };
+        
+        window.downloadLogs = function() {
+            var logsToUse = window.terminalPaused && window.frozenLogs ? window.frozenLogs : rawLogs;
+            var text = logsToUse.join('\\n');
+            var blob = new Blob([text], {type: 'text/plain'});
+            var elem = window.document.createElement('a');
+            elem.href = window.URL.createObjectURL(blob);
+            elem.download = 'esp32_serial_log.txt';
+            document.body.appendChild(elem);
+            elem.click();
+            document.body.removeChild(elem);
+        };
+        
+        window.scrollToLatest = function() {
+            if (terminalBody) {
+                terminalBody.scrollTop = terminalBody.scrollHeight;
+                window.terminalAutoScroll = true;
+                if (jumpBtn) jumpBtn.style.display = 'none';
+            }
+        };
+        
+        var tagColors = {
+            "[TinyML]": "#00FF9D",
+            "[IMU]": "#FF79C6",
+            "[Memory]": "#8B5CF6",
+            "[ERROR]": "#FF5C7A",
+            "[Error]": "#FF5C7A",
+            "[Warning]": "#FFC857",
+            "[ESP32]": "#00E5FF",
+            "[Replay]": "#8B5CF6",
+            "[Info]": "#00FF9D"
+        };
+        
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+        
+        function highlightTags(text) {
+            var escaped = escapeHtml(text);
+            for (var tag in tagColors) {
+                if (escaped.indexOf(tag) !== -1) {
+                    escaped = escaped.split(tag).join('<span style="color:' + tagColors[tag] + '; font-weight:bold;">' + tag + '</span>');
+                }
+            }
+            return escaped;
+        }
+        
+        function renderLogs() {
+            if (!container) return;
             
-            window.handleSearch = function(val) {{
-                window.terminalSearchQuery = val.toLowerCase();
-                renderLogs();
-            }};
+            var logsToUse = window.terminalPaused && window.frozenLogs ? window.frozenLogs : rawLogs;
             
-            window.togglePause = function() {{
-                window.terminalPaused = !window.terminalPaused;
-                if (window.terminalPaused) {{
-                    window.frozenLogs = [...rawLogs];
-                }}
+            if (window.terminalSearchQuery) {
+                logsToUse = logsToUse.filter(function(line) {
+                    return line.toLowerCase().indexOf(window.terminalSearchQuery) !== -1;
+                });
+            }
+            
+            var htmlContent = '';
+            
+            for (var i = 0; i < logsToUse.length; i++) {
+                var line = logsToUse[i];
+                var matchTs = line.match(/^(\\[[0-9:\\.]+\\])\\s+(.*)$/);
+                if (!matchTs) {
+                    htmlContent += '<div style="margin-bottom:4px; opacity:0.75;">' + escapeHtml(line) + '</div>';
+                    continue;
+                }
                 
-                if (pauseBtn) {{
-                    if (window.terminalPaused) {{
-                        pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
-                        pauseBtn.setAttribute('title', 'Resume logs');
-                    }} else {{
-                        pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
-                        pauseBtn.setAttribute('title', 'Pause logs');
-                    }}
-                }}
-                renderLogs();
-            }};
+                var timestamp = matchTs[1];
+                var payload = matchTs[2].trim();
+                
+                if (window.terminalLogMode === 'parsed' && payload.startsWith('{') && payload.endsWith('}')) {
+                    try {
+                        var data = JSON.parse(payload);
+                        if (data.type === 'telemetry') {
+                            var mag = data.mag.toFixed(3);
+                            var pred = data.pred;
+                            var predName = pred === 1 ? 'ANOMALOUS' : 'NORMAL';
+                            var predColor = pred === 1 ? '#FF5C7A' : '#00FF9D';
+                            var conf = (data.conf * 100).toFixed(1);
+                            var sram = data.static_ram_kb.toFixed(1);
+                            var buf = data.buffer;
+                            var lat = data.latency_ms.toFixed(2);
+                            
+                            htmlContent += '<div style="background:rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.03); border-radius:6px; padding:6px 12px; margin-bottom:8px; display:grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap:8px;">' +
+                                '<div><div style="font-size:0.65rem; color:rgba(255,255,255,0.35); font-family: monospace;">' + timestamp + '</div></div>' +
+                                '<div><span style="color:#00E5FF; font-weight:bold; font-size:0.7rem;">IMU</span><br><span style="color:rgba(255,255,255,0.5);">• Mag: </span><strong>' + mag + ' g</strong></div>' +
+                                '<div><span style="color:#00FF9D; font-weight:bold; font-size:0.7rem;">TinyML</span><br><span style="color:rgba(255,255,255,0.5);">• Pred: </span><strong style="color:' + predColor + ';">' + predName + '</strong> (' + conf + '%)</div>' +
+                                '<div><span style="color:#8B5CF6; font-weight:bold; font-size:0.7rem;">Memory</span><br><span style="color:rgba(255,255,255,0.5);">• SRAM: </span><strong>' + sram + ' KB</strong></div>' +
+                                '<div><span style="color:#FFC857; font-weight:bold; font-size:0.7rem;">Replay</span><br><span style="color:rgba(255,255,255,0.5);">• Buf: </span><strong>' + buf + ' / 50</strong></div>' +
+                                '<div><span style="color:#FF79C6; font-weight:bold; font-size:0.7rem;">Perf</span><br><span style="color:rgba(255,255,255,0.5);">• Lat: </span><strong>' + lat + ' ms</strong></div>' +
+                                '</div>';
+                            continue;
+                        }
+                    } catch(e) {}
+                }
+                
+                var styledPayload = highlightTags(payload);
+                var grayTimestamp = '<span style="color:rgba(255,255,255,0.3); margin-right:8px;">' + timestamp + '</span>';
+                htmlContent += '<div style="margin-bottom:3px; line-height: 1.4; font-size: 0.72rem;">' + grayTimestamp + styledPayload + '</div>';
+            }
             
-            window.clearLogs = function() {{
-                var pythonClearBtn = parent.document.querySelector('button[key="hidden_clear_logs_btn"]');
-                if (pythonClearBtn) {{
-                    pythonClearBtn.click();
-                }} else {{
-                    window.frozenLogs = [];
-                    rawLogs = [];
-                    renderLogs();
-                }}
-            }};
+            container.innerHTML = htmlContent;
             
-            window.copyLogs = function() {{
-                if (container) {{
-                    var tempElement = document.createElement('textarea');
-                    tempElement.value = container.innerText;
-                    document.body.appendChild(tempElement);
-                    tempElement.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(tempElement);
-                    alert('Logs copied to clipboard!');
-                }}
-            }};
-            
-            window.downloadLogs = function() {{
-                var logsToUse = window.terminalPaused && window.frozenLogs ? window.frozenLogs : rawLogs;
-                var text = logsToUse.join('\\n');
-                var blob = new Blob([text], {{type: 'text/plain'}});
-                var elem = window.document.createElement('a');
-                elem.href = window.URL.createObjectURL(blob);
-                elem.download = 'esp32_serial_log.txt';
-                document.body.appendChild(elem);
-                elem.click();
-                document.body.removeChild(elem);
-            }};
-            
-            window.scrollToLatest = function() {{
-                if (terminalBody) {{
-                    terminalBody.scrollTop = terminalBody.scrollHeight;
+            if (window.terminalAutoScroll && terminalBody) {
+                terminalBody.scrollTop = terminalBody.scrollHeight;
+            }
+        }
+        
+        if (terminalBody && !terminalBody.dataset.scrollListenerAdded) {
+            terminalBody.addEventListener('scroll', function() {
+                var maxScroll = terminalBody.scrollHeight - terminalBody.clientHeight;
+                var isAtBottom = maxScroll - terminalBody.scrollTop < 25;
+                
+                if (isAtBottom) {
                     window.terminalAutoScroll = true;
                     if (jumpBtn) jumpBtn.style.display = 'none';
-                }}
-            }};
-            
-            var tagColors = {{
-                "[TinyML]": "#00FF9D",
-                "[IMU]": "#FF79C6",
-                "[Memory]": "#8B5CF6",
-                "[ERROR]": "#FF5C7A",
-                "[Error]": "#FF5C7A",
-                "[Warning]": "#FFC857",
-                "[ESP32]": "#00E5FF",
-                "[Replay]": "#8B5CF6",
-                "[Info]": "#00FF9D"
-            }};
-            
-            function escapeHtml(text) {{
-                return text
-                    .replace(/&/g, "&amp;")
-                    .replace(/</g, "&lt;")
-                    .replace(/>/g, "&gt;")
-                    .replace(/"/g, "&quot;")
-                    .replace(/'/g, "&#039;");
-            }}
-            
-            function highlightTags(text) {{
-                var escaped = escapeHtml(text);
-                for (var tag in tagColors) {{
-                    if (escaped.indexOf(tag) !== -1) {{
-                        escaped = escaped.split(tag).join('<span style="color:' + tagColors[tag] + '; font-weight:bold;">' + tag + '</span>');
-                    }}
-                }}
-                return escaped;
-            }}
-            
-            function renderLogs() {{
-                if (!container) return;
-                
-                var logsToUse = window.terminalPaused && window.frozenLogs ? window.frozenLogs : rawLogs;
-                
-                if (window.terminalSearchQuery) {{
-                    logsToUse = logsToUse.filter(function(line) {{
-                        return line.toLowerCase().indexOf(window.terminalSearchQuery) !== -1;
-                    }});
-                }}
-                
-                var htmlContent = '';
-                
-                for (var i = 0; i < logsToUse.length; i++) {{
-                    var line = logsToUse[i];
-                    var matchTs = line.match(/^(\\[[0-9:\\.]+\\])\\s+(.*)$/);
-                    if (!matchTs) {{
-                        htmlContent += '<div style="margin-bottom:4px; opacity:0.75;">' + escapeHtml(line) + '</div>';
-                        continue;
-                    }}
-                    
-                    var timestamp = matchTs[1];
-                    var payload = matchTs[2].trim();
-                    
-                    if (window.terminalLogMode === 'parsed' && payload.startsWith('{{') && payload.endsWith('}}')) {{
-                        try {{
-                            var data = JSON.parse(payload);
-                            if (data.type === 'telemetry') {{
-                                var mag = data.mag.toFixed(3);
-                                var pred = data.pred;
-                                var predName = pred === 1 ? 'ANOMALOUS' : 'NORMAL';
-                                var predColor = pred === 1 ? '#FF5C7A' : '#00FF9D';
-                                var conf = (data.conf * 100).toFixed(1);
-                                var sram = data.static_ram_kb.toFixed(1);
-                                var buf = data.buffer;
-                                var lat = data.latency_ms.toFixed(2);
-                                
-                                htmlContent += `
-                                <div style="background:rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.03); border-radius:6px; padding:6px 12px; margin-bottom:8px; display:grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap:8px;">
-                                    <div>
-                                        <div style="font-size:0.65rem; color:rgba(255,255,255,0.35); font-family: monospace;">${{timestamp}}</div>
-                                    </div>
-                                    <div>
-                                        <span style="color:#00E5FF; font-weight:bold; font-size:0.7rem;">IMU</span><br>
-                                        <span style="color:rgba(255,255,255,0.5);">• Mag: </span><strong>${{mag}} g</strong>
-                                    </div>
-                                    <div>
-                                        <span style="color:#00FF9D; font-weight:bold; font-size:0.7rem;">TinyML</span><br>
-                                        <span style="color:rgba(255,255,255,0.5);">• Pred: </span><strong style="color:${{predColor}};">${{predName}}</strong> (${{conf}}%)
-                                    </div>
-                                    <div>
-                                        <span style="color:#8B5CF6; font-weight:bold; font-size:0.7rem;">Memory</span><br>
-                                        <span style="color:rgba(255,255,255,0.5);">• SRAM: </span><strong>${{sram}} KB</strong>
-                                    </div>
-                                    <div>
-                                        <span style="color:#FFC857; font-weight:bold; font-size:0.7rem;">Replay</span><br>
-                                        <span style="color:rgba(255,255,255,0.5);">• Buf: </span><strong>${{buf}} / 50</strong>
-                                    </div>
-                                    <div>
-                                        <span style="color:#FF79C6; font-weight:bold; font-size:0.7rem;">Perf</span><br>
-                                        <span style="color:rgba(255,255,255,0.5);">• Lat: </span><strong>${{lat}} ms</strong>
-                                    </div>
-                                </div>
-                                `;
-                                continue;
-                            }}
-                        } catch(e) {{}}
-                    }}
-                    
-                    var styledPayload = highlightTags(payload);
-                    var grayTimestamp = '<span style="color:rgba(255,255,255,0.3); margin-right:8px;">' + timestamp + '</span>';
-                    htmlContent += '<div style="margin-bottom:3px; line-height: 1.4; font-size: 0.72rem;">' + grayTimestamp + styledPayload + '</div>';
-                }}
-                
-                container.innerHTML = htmlContent;
-                
-                if (window.terminalAutoScroll && terminalBody) {{
-                    terminalBody.scrollTop = terminalBody.scrollHeight;
-                }}
-            }}
-            
-            if (terminalBody && !terminalBody.dataset.scrollListenerAdded) {{
-                terminalBody.addEventListener('scroll', function() {{
-                    var maxScroll = terminalBody.scrollHeight - terminalBody.clientHeight;
-                    var isAtBottom = maxScroll - terminalBody.scrollTop < 25;
-                    
-                    if (isAtBottom) {{
-                        window.terminalAutoScroll = true;
-                        if (jumpBtn) jumpBtn.style.display = 'none';
-                    }} else {{
-                        window.terminalAutoScroll = false;
-                        if (jumpBtn) jumpBtn.style.display = 'block';
-                    }}
-                }});
-                terminalBody.dataset.scrollListenerAdded = 'true';
-            }}
-            
-            renderLogs();
-        }})();
-    </script>
-    """, unsafe_allow_html=True)
+                } else {
+                    window.terminalAutoScroll = false;
+                    if (jumpBtn) jumpBtn.style.display = 'block';
+                }
+            });
+            terminalBody.dataset.scrollListenerAdded = 'true';
+        }
+        
+        renderLogs();
+    })();
+</script>"""
+    st.markdown(terminal_template.replace("{logs_json}", logs_json), unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------
 # WORKSPACE 2: CONTINUAL LEARNING
