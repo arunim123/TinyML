@@ -1348,154 +1348,7 @@ with ws_overview:
     if 'active_log_mode' not in st.session_state:
         st.session_state.active_log_mode = "Parsed View"
 
-    st.markdown("""
-    <style>
-    /* 1. Style the parent horizontal block containing the columns as the integrated terminal header */
-    div[data-testid="stHorizontalBlock"]:has(div.terminal-header-trigger) {{
-        background: #0d1117 !important;
-        border: 1px solid rgba(255, 255, 255, 0.05) !important;
-        border-radius: 12px 12px 0 0 !important;
-        padding: 6px 12px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: space-between !important;
-        border-bottom: none !important;
-        margin-top: 1.5rem !important;
-        min-height: 42px !important;
-    }}
-    
-    /* Remove vertical gap between title bar block and terminal body */
-    div[data-testid="stVerticalBlock"]:has(div.terminal-header-trigger) {{
-        gap: 0px !important;
-    }}
-    
-    /* 2. Segmented control columns row container */
-    div[data-testid="stHorizontalBlock"]:has(div.segmented-btn-container-trigger) {{
-        background: rgba(255, 255, 255, 0.02) !important;
-        border: 1px solid rgba(255, 255, 255, 0.06) !important;
-        border-radius: 30px !important;
-        padding: 1px !important;
-        display: flex !important;
-        gap: 0px !important;
-        align-items: center !important;
-        justify-content: center !important;
-        height: 28px !important;
-        width: 140px !important;
-    }}
-    
-    div[data-testid="stHorizontalBlock"]:has(div.segmented-btn-container-trigger) div[data-testid="column"] {{
-        padding: 0px !important;
-        margin: 0px !important;
-        flex: 1 !important;
-    }}
-    
-    /* Segmented buttons styling */
-    div[data-testid="stHorizontalBlock"]:has(div.segmented-btn-container-trigger) button {{
-        background: transparent !important;
-        border: none !important;
-        color: rgba(255, 255, 255, 0.45) !important;
-        border-radius: 30px !important;
-        font-size: 0.72rem !important;
-        font-family: 'Outfit', sans-serif !important;
-        cursor: pointer !important;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-        padding: 2px 10px !important;
-        height: 24px !important;
-        line-height: 1 !important;
-        font-weight: 500 !important;
-        margin: 0px !important;
-        box-shadow: none !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }}
-    
-    div[data-testid="stHorizontalBlock"]:has(div.segmented-btn-container-trigger) button:hover {{
-        color: #ffffff !important;
-    }}
-    
-    /* Active button state */
-    div[data-testid="stHorizontalBlock"]:has(div.segmented-btn-container-trigger) button[class*="primary"] {{
-        background: rgba(0, 229, 255, 0.12) !important;
-        border: 1px solid rgba(0, 229, 255, 0.25) !important;
-        color: #00E5FF !important;
-        font-weight: 700 !important;
-        box-shadow: 0 2px 6px rgba(0, 229, 255, 0.1) !important;
-    }}
-    
-    /* 3. Search field input styling */
-    div[data-testid="stTextInput"]:has(input[placeholder*="Search"]) {{
-        margin: 0px !important;
-        padding: 0px !important;
-    }}
-    div[data-testid="stTextInput"]:has(input[placeholder*="Search"]) label {{
-        display: none !important;
-    }}
-    div[data-testid="stTextInput"]:has(input[placeholder*="Search"]) input {{
-        border-radius: 30px !important;
-        background: rgba(255, 255, 255, 0.02) !important;
-        border: 1px solid rgba(255, 255, 255, 0.05) !important;
-        color: #ffffff !important;
-        font-size: 0.72rem !important;
-        height: 28px !important;
-        padding-left: 28px !important;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-        width: 140px !important;
-    }}
-    div[data-testid="stTextInput"]:has(input[placeholder*="Search"]) input:focus {{
-        border-color: #00E5FF !important;
-        box-shadow: 0 0 8px rgba(0, 229, 255, 0.2) !important;
-        background: rgba(255, 255, 255, 0.04) !important;
-        width: 170px !important;
-    }}
-    
-    /* 4. Toolbar buttons styling */
-    div[data-testid="column"]:has(button[key*="pause_btn"]),
-    div[data-testid="column"]:has(button[key*="clear_logs_btn"]),
-    div[data-testid="column"]:has(button[key*="download_logs_btn"]) {{
-        width: 32px !important;
-        flex: none !important;
-    }}
-    
-    div[data-testid="stHorizontalBlock"]:has(button[key*="pause_btn"]) {{
-        gap: 4px !important;
-        justify-content: flex-end !important;
-        align-items: center !important;
-        display: flex !important;
-    }}
-    
-    div[data-testid="stHorizontalBlock"]:has(button[key*="pause_btn"]) button {{
-        min-width: 0px !important;
-        width: 28px !important;
-        height: 28px !important;
-        padding: 0px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        border-radius: 6px !important;
-        background: transparent !important;
-        border: 1px solid rgba(255, 255, 255, 0.05) !important;
-        color: rgba(255, 255, 255, 0.6) !important;
-        font-size: 0.85rem !important;
-        transition: all 0.2s ease !important;
-        margin: 0px !important;
-        box-shadow: none !important;
-    }}
-    
-    div[data-testid="stHorizontalBlock"]:has(button[key*="pause_btn"]) button:hover {{
-        background: rgba(0, 229, 255, 0.08) !important;
-        border-color: #00E5FF !important;
-        color: #00E5FF !important;
-    }}
-    
-    /* Style Copy button to match */
-    button[title="Copy logs"]:hover {{
-        background: rgba(0, 229, 255, 0.08) !important;
-        border-color: #00E5FF !important;
-        color: #00E5FF !important;
-    }}
-    </style>
-    """, unsafe_allow_html=True)
+
 
     # Hidden control block for callbacks
     col_hide = st.columns(1)
@@ -1804,33 +1657,21 @@ with ws_overview:
                 
                 <!-- Toolbar buttons -->
                 <div class="terminal-toolbar">
-                    <div class="tooltip-container">
-                        <button id="btn-pause" onclick="togglePause()" class="toolbar-btn">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-                        </button>
-                        <span id="tooltip-pause" class="tooltip-text">Pause logs</span>
-                    </div>
+                    <button id="btn-pause" onclick="togglePause()" class="toolbar-btn" title="Pause logs">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                    </button>
                     
-                    <div class="tooltip-container">
-                        <button onclick="clearLogs()" class="toolbar-btn">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                        </button>
-                        <span class="tooltip-text">Clear console</span>
-                    </div>
+                    <button onclick="clearLogs()" class="toolbar-btn" title="Clear console">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    </button>
                     
-                    <div class="tooltip-container">
-                        <button onclick="copyLogs()" class="toolbar-btn">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                        </button>
-                        <span class="tooltip-text">Copy logs</span>
-                    </div>
+                    <button onclick="copyLogs()" class="toolbar-btn" title="Copy logs">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
                     
-                    <div class="tooltip-container">
-                        <button onclick="downloadLogs()" class="toolbar-btn">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                        </button>
-                        <span class="tooltip-text">Download logs</span>
-                    </div>
+                    <button onclick="downloadLogs()" class="toolbar-btn" title="Download logs">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    </button>
                 </div>
             </div>
         </div>
@@ -1858,7 +1699,6 @@ with ws_overview:
             var jumpBtn = document.getElementById('dev-jump-to-latest-btn');
             var searchInput = document.getElementById('dev-search-input');
             var pauseBtn = document.getElementById('btn-pause');
-            var tooltipPause = document.getElementById('tooltip-pause');
             
             // Sync search value input
             if (searchInput) searchInput.value = window.terminalSearchQuery;
@@ -1883,10 +1723,10 @@ with ws_overview:
             if (pauseBtn) {{
                 if (window.terminalPaused) {{
                     pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
-                    if (tooltipPause) tooltipPause.innerText = 'Resume logs';
+                    pauseBtn.setAttribute('title', 'Resume logs');
                 }} else {{
                     pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
-                    if (tooltipPause) tooltipPause.innerText = 'Pause logs';
+                    pauseBtn.setAttribute('title', 'Pause logs');
                 }}
             }}
             
@@ -1920,10 +1760,10 @@ with ws_overview:
                 if (pauseBtn) {{
                     if (window.terminalPaused) {{
                         pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
-                        if (tooltipPause) tooltipPause.innerText = 'Resume logs';
+                        pauseBtn.setAttribute('title', 'Resume logs');
                     }} else {{
                         pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
-                        if (tooltipPause) tooltipPause.innerText = 'Pause logs';
+                        pauseBtn.setAttribute('title', 'Pause logs');
                     }}
                 }}
                 renderLogs();
