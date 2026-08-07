@@ -1385,8 +1385,8 @@ with ws_overview:
     # 5. Styling block
     st.markdown(r"""
     <style>
-    /* Hide the hidden control container */
-    .hidden-controls {
+    /* Hide the entire container containing the hidden control marker */
+    div[data-testid="stVerticalBlock"]:has(.hidden-control-marker) {
         display: none !important;
         height: 0px !important;
         margin: 0px !important;
@@ -1730,35 +1730,35 @@ with ws_overview:
     </script>
     """, unsafe_allow_html=True)
 
-    # 8. Render Hidden Controls for state management
-    st.markdown('<div class="hidden-controls" style="display: none !important;">', unsafe_allow_html=True)
-    if st.session_state.console_paused:
-        if st.button("python_btn_resume", key="py_btn_resume"):
-            st.session_state.console_paused = False
-            st.rerun()
-    else:
-        if st.button("python_btn_pause", key="py_btn_pause"):
-            st.session_state.console_paused = True
+    # 8. Render Hidden Controls for state management inside a targeted container
+    with st.container():
+        st.markdown('<div class="hidden-control-marker"></div>', unsafe_allow_html=True)
+        if st.session_state.console_paused:
+            if st.button("python_btn_resume", key="py_btn_resume"):
+                st.session_state.console_paused = False
+                st.rerun()
+        else:
+            if st.button("python_btn_pause", key="py_btn_pause"):
+                st.session_state.console_paused = True
+                if 'serial_bridge' in st.session_state:
+                    st.session_state.paused_logs = list(st.session_state.serial_bridge.serial_logs)
+                st.rerun()
+
+        if st.button("python_btn_clear", key="py_btn_clear"):
             if 'serial_bridge' in st.session_state:
-                st.session_state.paused_logs = list(st.session_state.serial_bridge.serial_logs)
+                with st.session_state.serial_bridge.lock:
+                    st.session_state.serial_bridge.serial_logs = []
+            st.session_state.paused_logs = []
+            st.toast("Console cleared")
             st.rerun()
 
-    if st.button("python_btn_clear", key="py_btn_clear"):
-        if 'serial_bridge' in st.session_state:
-            with st.session_state.serial_bridge.lock:
-                st.session_state.serial_bridge.serial_logs = []
-        st.session_state.paused_logs = []
-        st.toast("Console cleared")
-        st.rerun()
-
-    st.download_button(
-        label="python_btn_download",
-        data=logs_txt,
-        file_name=f"esp32_serial_log_{time.strftime('%Y%m%d_%H%M%S')}.txt",
-        mime="text/plain",
-        key="py_btn_download"
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.download_button(
+            label="python_btn_download",
+            data=logs_txt,
+            file_name=f"esp32_serial_log_{time.strftime('%Y%m%d_%H%M%S')}.txt",
+            mime="text/plain",
+            key="py_btn_download"
+        )
 
 # ---------------------------------------------------------------------
 # WORKSPACE 2: CONTINUAL LEARNING
