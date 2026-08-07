@@ -1370,9 +1370,8 @@ with ws_overview:
     import json
     logs_json = json.dumps(logs_list)
 
-    # Style block for developer terminal
-    # Style block and html for developer terminal
-    terminal_template = """<style>
+    # Style block and HTML raw template for developer terminal
+    terminal_template = r"""<style>
 /* Hide the hidden control container */
 div[data-testid="column"]:has(div.hidden-control-container) {
     display: none !important;
@@ -1386,8 +1385,8 @@ div[data-testid="column"]:has(div.hidden-control-container) {
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 12px;
     overflow: hidden;
-    margin-top: 1.5rem;
-    margin-bottom: 2rem;
+    margin-top: 0.75rem;
+    margin-bottom: 1.5rem;
     font-family: 'JetBrains Mono', monospace;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
     width: 100%;
@@ -1402,7 +1401,7 @@ div[data-testid="column"]:has(div.hidden-control-container) {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 16px;
+    padding: 0 12px;
     user-select: none;
 }
 
@@ -1476,7 +1475,7 @@ div[data-testid="column"]:has(div.hidden-control-container) {
 .segmented-glider {
     position: absolute;
     height: 22px;
-    width: 57px; /* (120 - 4 - 2)/2 */
+    width: 57px;
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 4px;
@@ -1536,14 +1535,14 @@ div[data-testid="column"]:has(div.hidden-control-container) {
 
 .toolbar-btn {
     background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    border-radius: 6px;
+    border: none;
+    border-radius: 50%;
     width: 28px;
     height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.45);
     cursor: pointer;
     transition: all 0.2s ease;
     padding: 0;
@@ -1551,24 +1550,23 @@ div[data-testid="column"]:has(div.hidden-control-container) {
 }
 
 .toolbar-btn:hover {
-    background: rgba(255, 255, 255, 0.06);
-    border-color: rgba(255, 255, 255, 0.15);
-    color: #ffffff;
+    background: rgba(0, 229, 255, 0.08);
+    color: #00E5FF;
 }
 
 /* Terminal Body Style */
 .dev-terminal-body {
     height: 400px;
     overflow-y: auto;
-    padding: 12px;
+    padding: 8px 12px;
     position: relative;
     background: #080c14;
     box-sizing: border-box;
 }
 
 #dev-terminal-content {
-    line-height: 1.5;
-    font-size: 0.72rem;
+    line-height: 1.4;
+    font-size: 0.7rem;
     color: rgba(255, 255, 255, 0.85);
     font-family: 'JetBrains Mono', monospace;
 }
@@ -1600,7 +1598,6 @@ div[data-testid="column"]:has(div.hidden-control-container) {
 
 <div class="developer-terminal">
     <div class="dev-terminal-header">
-        <!-- Left Header -->
         <div class="header-left">
             <div class="terminal-dots">
                 <span class="terminal-dot dot-red"></span>
@@ -1610,43 +1607,38 @@ div[data-testid="column"]:has(div.hidden-control-container) {
             <span class="terminal-title">On-Device Telemetry Log</span>
         </div>
         
-        <!-- Right Header Controls -->
         <div class="header-right">
-            <!-- Segmented Control -->
             <div class="segmented-control">
                 <div class="segmented-glider"></div>
                 <div id="btn-parsed" class="segment-btn active" onclick="setLogMode('parsed')">Parsed</div>
                 <div id="btn-raw" class="segment-btn" onclick="setLogMode('raw')">Raw</div>
             </div>
             
-            <!-- Search container -->
             <div class="search-container">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                 <input type="text" id="dev-search-input" oninput="handleSearch(this.value)" placeholder="Search logs..." />
             </div>
             
-            <!-- Toolbar buttons -->
             <div class="terminal-toolbar">
                 <button id="btn-pause" onclick="togglePause()" class="toolbar-btn" title="Pause logs">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
                 </button>
                 
                 <button onclick="clearLogs()" class="toolbar-btn" title="Clear console">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                 </button>
                 
                 <button onclick="copyLogs()" class="toolbar-btn" title="Copy logs">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                 </button>
                 
                 <button onclick="downloadLogs()" class="toolbar-btn" title="Download logs">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 </button>
             </div>
         </div>
     </div>
     
-    <!-- Viewport log body -->
     <div class="dev-terminal-body">
         <div id="dev-terminal-content"></div>
         <button id="dev-jump-to-latest-btn" onclick="scrollToLatest()" style="display: none;">
@@ -1670,10 +1662,8 @@ div[data-testid="column"]:has(div.hidden-control-container) {
         var searchInput = document.getElementById('dev-search-input');
         var pauseBtn = document.getElementById('btn-pause');
         
-        // Sync search value input
         if (searchInput) searchInput.value = window.terminalSearchQuery;
         
-        // Set segmented control active state glider
         var glider = document.querySelector('.segmented-glider');
         var parsedBtn = document.getElementById('btn-parsed');
         var rawBtn = document.getElementById('btn-raw');
@@ -1689,13 +1679,12 @@ div[data-testid="column"]:has(div.hidden-control-container) {
             }
         }
         
-        // Sync pause button icon
         if (pauseBtn) {
             if (window.terminalPaused) {
-                pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+                pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
                 pauseBtn.setAttribute('title', 'Resume logs');
             } else {
-                pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+                pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
                 pauseBtn.setAttribute('title', 'Pause logs');
             }
         }
@@ -1729,10 +1718,10 @@ div[data-testid="column"]:has(div.hidden-control-container) {
             
             if (pauseBtn) {
                 if (window.terminalPaused) {
-                    pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
+                    pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>';
                     pauseBtn.setAttribute('title', 'Resume logs');
                 } else {
-                    pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
+                    pauseBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>';
                     pauseBtn.setAttribute('title', 'Pause logs');
                 }
             }
@@ -1815,28 +1804,22 @@ div[data-testid="column"]:has(div.hidden-control-container) {
         
         function renderLogs() {
             if (!container) return;
-            
             var logsToUse = window.terminalPaused && window.frozenLogs ? window.frozenLogs : rawLogs;
-            
             if (window.terminalSearchQuery) {
                 logsToUse = logsToUse.filter(function(line) {
                     return line.toLowerCase().indexOf(window.terminalSearchQuery) !== -1;
                 });
             }
-            
             var htmlContent = '';
-            
             for (var i = 0; i < logsToUse.length; i++) {
                 var line = logsToUse[i];
-                var matchTs = line.match(/^(\\[[0-9:\\.]+\\])\\s+(.*)$/);
+                var matchTs = line.match(/^(\[[0-9:\.]+\])\s+(.*)$/);
                 if (!matchTs) {
                     htmlContent += '<div style="margin-bottom:4px; opacity:0.75;">' + escapeHtml(line) + '</div>';
                     continue;
                 }
-                
                 var timestamp = matchTs[1];
                 var payload = matchTs[2].trim();
-                
                 if (window.terminalLogMode === 'parsed' && payload.startsWith('{') && payload.endsWith('}')) {
                     try {
                         var data = JSON.parse(payload);
@@ -1849,7 +1832,6 @@ div[data-testid="column"]:has(div.hidden-control-container) {
                             var sram = data.static_ram_kb.toFixed(1);
                             var buf = data.buffer;
                             var lat = data.latency_ms.toFixed(2);
-                            
                             htmlContent += '<div style="background:rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.03); border-radius:6px; padding:6px 12px; margin-bottom:8px; display:grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap:8px;">' +
                                 '<div><div style="font-size:0.65rem; color:rgba(255,255,255,0.35); font-family: monospace;">' + timestamp + '</div></div>' +
                                 '<div><span style="color:#00E5FF; font-weight:bold; font-size:0.7rem;">IMU</span><br><span style="color:rgba(255,255,255,0.5);">• Mag: </span><strong>' + mag + ' g</strong></div>' +
@@ -1862,14 +1844,11 @@ div[data-testid="column"]:has(div.hidden-control-container) {
                         }
                     } catch(e) {}
                 }
-                
                 var styledPayload = highlightTags(payload);
                 var grayTimestamp = '<span style="color:rgba(255,255,255,0.3); margin-right:8px;">' + timestamp + '</span>';
                 htmlContent += '<div style="margin-bottom:3px; line-height: 1.4; font-size: 0.72rem;">' + grayTimestamp + styledPayload + '</div>';
             }
-            
             container.innerHTML = htmlContent;
-            
             if (window.terminalAutoScroll && terminalBody) {
                 terminalBody.scrollTop = terminalBody.scrollHeight;
             }
@@ -1879,7 +1858,6 @@ div[data-testid="column"]:has(div.hidden-control-container) {
             terminalBody.addEventListener('scroll', function() {
                 var maxScroll = terminalBody.scrollHeight - terminalBody.clientHeight;
                 var isAtBottom = maxScroll - terminalBody.scrollTop < 25;
-                
                 if (isAtBottom) {
                     window.terminalAutoScroll = true;
                     if (jumpBtn) jumpBtn.style.display = 'none';
@@ -1890,11 +1868,14 @@ div[data-testid="column"]:has(div.hidden-control-container) {
             });
             terminalBody.dataset.scrollListenerAdded = 'true';
         }
-        
         renderLogs();
     })();
 </script>"""
-    st.markdown(terminal_template.replace("{logs_json}", logs_json), unsafe_allow_html=True)
+
+    # Format and clean the layout indentation
+    clean_lines = [line.lstrip() for line in terminal_template.splitlines()]
+    clean_template = "\n".join(clean_lines)
+    st.markdown(clean_template.replace("{logs_json}", logs_json), unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------
 # WORKSPACE 2: CONTINUAL LEARNING
