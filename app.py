@@ -1374,11 +1374,19 @@ with ws_overview:
     # Download logs content
     logs_txt = "\n".join(logs_list)
 
-    # 4. Stylings block for Streamlit widgets and columns inside the header
+    # 4. Define dynamic SVGs
+    if st.session_state.console_paused:
+        pause_play_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>'
+        pause_play_title = "Resume live stream"
+    else:
+        pause_play_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>'
+        pause_play_title = "Pause live stream"
+
+    # 5. Styling block
     st.markdown(r"""
     <style>
     /* Hide the hidden control container */
-    div[data-testid="column"]:has(div.hidden-control-container) {
+    .hidden-controls {
         display: none !important;
         height: 0px !important;
         margin: 0px !important;
@@ -1386,7 +1394,7 @@ with ws_overview:
     }
 
     /* Columns row container styling as terminal header */
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) {
         background: #0d1117 !important;
         border: 1px solid rgba(255, 255, 255, 0.05) !important;
         border-bottom: none !important;
@@ -1400,7 +1408,7 @@ with ws_overview:
         box-sizing: border-box !important;
     }
 
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"] {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) div[data-testid="column"] {
         display: flex !important;
         align-items: center !important;
         padding: 0 !important;
@@ -1409,26 +1417,17 @@ with ws_overview:
         height: 100% !important;
     }
 
-    /* Set explicit widths for columns containing buttons to prevent wrapping or resizing */
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(4),
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(5),
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(6),
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(7) {
-        min-width: 32px !important;
-        max-width: 44px !important;
-    }
-
     /* Hide default margins inside header widgets */
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="element-container"] {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) div[data-testid="element-container"] {
         margin-bottom: 0px !important;
     }
 
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="stWidgetLabel"] {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) div[data-testid="stWidgetLabel"] {
         display: none !important;
     }
 
     /* Segmented Toggle Selector */
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) .stSegmentedControl {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stSegmentedControl {
         background: rgba(255, 255, 255, 0.02) !important;
         border: 1px solid rgba(255, 255, 255, 0.05) !important;
         border-radius: 6px !important;
@@ -1439,13 +1438,13 @@ with ws_overview:
         align-items: center !important;
         box-sizing: border-box !important;
     }
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) .stSegmentedControl > div {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stSegmentedControl > div {
         display: flex !important;
         gap: 0px !important;
         width: 100% !important;
         height: 100% !important;
     }
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) .stSegmentedControl button {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stSegmentedControl button {
         flex: 1 !important;
         font-size: 0.7rem !important;
         font-weight: 500 !important;
@@ -1461,29 +1460,29 @@ with ws_overview:
         transition: all 0.2s ease !important;
         min-height: unset !important;
     }
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) .stSegmentedControl button[aria-checked="true"] {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stSegmentedControl button[aria-checked="true"] {
         color: #ffffff !important;
         background: rgba(255, 255, 255, 0.08) !important;
         border: 1px solid rgba(255, 255, 255, 0.1) !important;
     }
 
     /* Search Box styling */
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) .stTextInput {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stTextInput {
         width: auto !important;
     }
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) .stTextInput > div {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stTextInput > div {
         background: transparent !important;
         border: none !important;
         padding: 0 !important;
         margin: 0 !important;
     }
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) .stTextInput div[data-baseweb="input"] {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stTextInput div[data-baseweb="input"] {
         background: transparent !important;
         border: none !important;
         box-shadow: none !important;
         padding: 0 !important;
     }
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) .stTextInput input {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stTextInput input {
         background: rgba(255, 255, 255, 0.02) !important;
         border: 1px solid rgba(255, 255, 255, 0.05) !important;
         border-radius: 30px !important;
@@ -1499,80 +1498,49 @@ with ws_overview:
         background-repeat: no-repeat !important;
         background-position: 8px center !important;
     }
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) .stTextInput input:focus {
+    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stTextInput input:focus {
         width: 160px !important;
         border-color: #00E5FF !important;
         background: rgba(255, 255, 255, 0.04) !important;
         box-shadow: 0 0 10px rgba(0, 229, 255, 0.15) !important;
     }
 
-    /* Style Streamlit Action buttons to shrink-wrap and look like circular icons */
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(4) button,
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(5) button,
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(7) button {
-        background-repeat: no-repeat !important;
-        background-position: center !important;
-        background-color: transparent !important;
+    /* HTML Toolbar Component Alignment */
+    .terminal-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        width: 100%;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .toolbar-btn {
+        background: transparent !important;
         border: none !important;
         border-radius: 50% !important;
         width: 28px !important;
         height: 28px !important;
-        color: transparent !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: rgba(255, 255, 255, 0.45) !important;
         cursor: pointer !important;
         transition: all 0.2s ease !important;
-        min-height: unset !important;
-        min-width: unset !important;
         padding: 0 !important;
         margin: 0 !important;
         box-shadow: none !important;
-    }
-
-    /* Column 4: Pause/Resume SVG (Default Pause) */
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(4) button {
-        background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC40NSkiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cmVjdCB4PSI2IiB5PSI0IiB3aWR0aD0iNCIgaGVpZ2h0PSIxNiI+PC9yZWN0PjxyZWN0IHg9IjE0IiB5PSI0IiB3aWR0aD0iNCIgaGVpZ2h0PSIxNiI+PC9yZWN0Pjwvc3ZnPg==') !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(4) button:hover {
-        background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMEU1RkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cmVjdCB4PSI2IiB5PSI0IiB3aWR0aD0iNCIgaGVpZ2h0PSIxNiI+PC9yZWN0PjxyZWN0IHg9IjE0IiB5PSI0IiB3aWR0aD0iNCIgaGVpZ2h0PSIxNiI+PC9yZWN0Pjwvc3ZnPg==') !important;
-        background-color: rgba(0, 229, 255, 0.08) !important;
-    }
-
-    /* Column 5: Clear SVG (Trash-2) */
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(5) button {
-        background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC40NSkiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSIzIDYgNSA2IDIxIDYiPjwvcG9seWxpbmU+PHBhdGggZD0iTTE5IDZ2MTRhMiAyIDAgMCAxLTIgMkg3YTIgMiAwIDAgMS0yLTJWNm0zIDBWNGEyIDIgMCAwIDEgMi0yaDRhMiAyIDAgMCAxIDIgMnYyIj48L3BhdGg+PGxpbmUgeDE9IjEwIiB5MT0iMTEiIHgyPSIxMCIgeTI9IjE3Ij48L2xpbmU+PGxpbmUgeDE9IjE0IiB5MT0iMTEiIHgyPSIxNCIgeTI9IjE3Ij48L2xpbmU+PC9zdmc+') !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(5) button:hover {
-        background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMEU1RkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSIzIDYgNSA2IDIxIDYiPjwvcG9seWxpbmU+PHBhdGggZD0iTTE5IDZ2MTRhMiAyIDAgMCAxLTIgMkg3YTIgMiAwIDAgMS0yLTJWNm0zIDBWNGEyIDIgMCAwIDEgMi0yaDRhMiAyIDAgMCAxIDIgMnYyIj48L3BhdGg+PGxpbmUgeDE9IjEwIiB5MT0iMTEiIHgyPSIxMCIgeTI9IjE3Ij48L2xpbmU+PGxpbmUgeDE9IjE0IiB5MT0iMTEiIHgyPSIxNCIgeTI9IjE3Ij48L2xpbmU+PC9zdmc+') !important;
-        background-color: rgba(0, 229, 255, 0.08) !important;
-    }
-
-    /* Column 7: Download SVG (Download) */
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(7) button {
-        background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC40NSkiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMjEgMTV2NGEyIDIgMCAwIDEtMiAySDVhMiAyIDAgMCAxLTItMnYtNCI+PC9wYXRoPjxwb2x5bGluZSBwb2ludHM9IjcgMTAgMTIgMTUgMTcgMTAiPjwvcG9seWxpbmU+PGxpbmUgeDE9IjEyIiB5MT0iMTUiIHgyPSIxMiIgeTI9IjMiPjwvbGxpbmU+PC9zdmc+') !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(7) button:hover {
-        background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMEU1RkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4gPHBhdGggZD0iTTIxIDE1djRhMiAyIDAgMCAxLTIgMkg1YTIgMiAwIDAgMS0yLTJ2LTQiPjwvcGF0aD48cG9seWxpbmUgcG9pbnRzPSI3IDEwIDEyIDE1IDE3IDEwIj48L3BvbHlsaW5lPjxsaW5lIHgxPSIxMiIgeTE9IjE1IiB4Mj0iMTIiIHkyPSIzIj48L2xpbmU+PC9zdmc+') !important;
-        background-color: rgba(0, 229, 255, 0.08) !important;
-    }
-
-    /* Client-side HTML Copy Button */
-    .toolbar-btn {
-        background: transparent;
-        border: none;
-        border-radius: 50%;
-        width: 28px;
-        height: 28px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: rgba(255, 255, 255, 0.45);
-        cursor: pointer;
-        transition: all 0.2s ease;
-        padding: 0;
-        margin: 0 !important;
+        outline: none !important;
     }
     .toolbar-btn:hover {
         background-color: rgba(0, 229, 255, 0.08) !important;
         color: #00E5FF !important;
+    }
+    .toolbar-btn svg {
+        display: block;
+        width: 16px;
+        height: 16px;
     }
 
     /* Terminal Body Viewport Container */
@@ -1621,23 +1589,9 @@ with ws_overview:
     </style>
     """, unsafe_allow_html=True)
 
-    # Dynamic styling override if paused (changes column 4 to play icon)
-    if st.session_state.console_paused:
-        st.markdown(r"""
-        <style>
-        div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(4) button {
-            background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC40NSkiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWdvbiBwb2ludHM9IjUgMyAxOSAxMiA1IDIxIDUgMyI+PC9wb2x5Z29uPjwvc3ZnPg==') !important;
-        }
-        div[data-testid="stHorizontalBlock"]:has(.toolbar-btn) div[data-testid="column"]:nth-of-type(4) button:hover {
-            background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMwMEU1RkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4gPHBvbHlnb24gcG9pbnRzPSI1IDMgMTkgMTIgNSAyMSA1IDMiPjwvcG9seWdvbj48L3N2Zz4=') !important;
-            background-color: rgba(0, 229, 255, 0.08) !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-    # 5. Render Horizontal Toolbar Header using st.columns
-    col_title, col_toggle, col_search, col_pause, col_clear, col_copy, col_download = st.columns(
-        [3.2, 1.8, 2.5, 0.4, 0.4, 0.4, 0.4]
+    # 6. Render Horizontal Toolbar Header using st.columns
+    col_title, col_toggle, col_search, col_toolbar = st.columns(
+        [3.2, 1.8, 2.5, 1.6]
     )
 
     with col_title:
@@ -1670,49 +1624,25 @@ with ws_overview:
             key="console_search_query"
         )
 
-    with col_pause:
-        if st.session_state.console_paused:
-            if st.button("", key="console_btn_resume", help="Resume live stream"):
-                st.session_state.console_paused = False
-                st.rerun()
-        else:
-            if st.button("", key="console_btn_pause", help="Pause live stream"):
-                st.session_state.console_paused = True
-                if 'serial_bridge' in st.session_state:
-                    st.session_state.paused_logs = list(st.session_state.serial_bridge.serial_logs)
-                st.rerun()
-
-    with col_clear:
-        if st.button("", key="console_btn_clear", help="Clear console logs"):
-            if 'serial_bridge' in st.session_state:
-                with st.session_state.serial_bridge.lock:
-                    st.session_state.serial_bridge.serial_logs = []
-            st.session_state.paused_logs = []
-            st.toast("Console cleared")
-            st.rerun()
-
-    with col_copy:
-        st.markdown(r"""
-        <button class="toolbar-btn" title="Copy logs" onclick="
-            var text = document.getElementById('dev-terminal-content').innerText;
-            navigator.clipboard.writeText(text);
-            alert('Logs copied to clipboard!');
-        ">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-        </button>
+    with col_toolbar:
+        st.markdown(f"""
+        <div class="terminal-toolbar">
+            <button class="toolbar-btn" onclick="triggerPause()" title="{pause_play_title}">
+                {pause_play_svg}
+            </button>
+            <button class="toolbar-btn" onclick="triggerClear()" title="Clear logs">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+            </button>
+            <button class="toolbar-btn" onclick="triggerCopy()" title="Copy logs">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+            <button class="toolbar-btn" onclick="triggerDownload()" title="Download logs">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            </button>
+        </div>
         """, unsafe_allow_html=True)
 
-    with col_download:
-        st.download_button(
-            label="",
-            data=logs_txt,
-            file_name=f"esp32_serial_log_{time.strftime('%Y%m%d_%H%M%S')}.txt",
-            mime="text/plain",
-            key="console_btn_download",
-            help="Download logs"
-        )
-
-    # 6. Render Viewport Body container
+    # 7. Render Viewport Body container and JS callbacks
     st.markdown(f"""
     <div class="dev-terminal-body">
         <div id="dev-terminal-content">
@@ -1765,9 +1695,70 @@ with ws_overview:
                     btn.style.display = 'block';
                 }}
             }}
+
+            // Reconnected JS triggers for hidden native Streamlit buttons
+            window.triggerPause = function() {{
+                var buttons = parent.document.querySelectorAll('button');
+                var btn = Array.from(buttons).find(b => {{
+                    var txt = b.textContent.trim();
+                    return txt === 'python_btn_pause' || txt === 'python_btn_resume';
+                }});
+                if (btn) btn.click();
+            }};
+
+            window.triggerClear = function() {{
+                var buttons = parent.document.querySelectorAll('button');
+                var btn = Array.from(buttons).find(b => b.textContent.trim() === 'python_btn_clear');
+                if (btn) btn.click();
+            }};
+
+            window.triggerCopy = function() {{
+                var text = document.getElementById('dev-terminal-content').innerText;
+                navigator.clipboard.writeText(text).then(function() {{
+                    alert('Logs copied to clipboard!');
+                }}).catch(function(err) {{
+                    console.error('Copy failed: ', err);
+                }});
+            }};
+
+            window.triggerDownload = function() {{
+                var buttons = parent.document.querySelectorAll('button');
+                var btn = Array.from(buttons).find(b => b.textContent.trim() === 'python_btn_download');
+                if (btn) btn.click();
+            }};
         }})();
     </script>
     """, unsafe_allow_html=True)
+
+    # 8. Render Hidden Controls for state management
+    st.markdown('<div class="hidden-controls" style="display: none !important;">', unsafe_allow_html=True)
+    if st.session_state.console_paused:
+        if st.button("python_btn_resume", key="py_btn_resume"):
+            st.session_state.console_paused = False
+            st.rerun()
+    else:
+        if st.button("python_btn_pause", key="py_btn_pause"):
+            st.session_state.console_paused = True
+            if 'serial_bridge' in st.session_state:
+                st.session_state.paused_logs = list(st.session_state.serial_bridge.serial_logs)
+            st.rerun()
+
+    if st.button("python_btn_clear", key="py_btn_clear"):
+        if 'serial_bridge' in st.session_state:
+            with st.session_state.serial_bridge.lock:
+                st.session_state.serial_bridge.serial_logs = []
+        st.session_state.paused_logs = []
+        st.toast("Console cleared")
+        st.rerun()
+
+    st.download_button(
+        label="python_btn_download",
+        data=logs_txt,
+        file_name=f"esp32_serial_log_{time.strftime('%Y%m%d_%H%M%S')}.txt",
+        mime="text/plain",
+        key="py_btn_download"
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------
 # WORKSPACE 2: CONTINUAL LEARNING
