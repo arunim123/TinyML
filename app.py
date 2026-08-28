@@ -35,8 +35,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+import json
 import time
-import random
 
 # Import custom TinyML Vibration PDM modules
 try:
@@ -492,73 +492,7 @@ div[data-testid="stSidebarDraghandle"] {
     100% { opacity: 0.4; }
 }
 
-/* Custom Terminal overrides */
-.terminal-panel {
-    padding: 0 !important;
-    overflow: hidden !important;
-}
-.terminal-header {
-    background: rgba(255, 255, 255, 0.01) !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
-    padding: 0.6rem 1.2rem !important;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.terminal-dots {
-    display: flex;
-    gap: 6px;
-}
-.terminal-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-}
-.dot-red { background: rgba(255, 92, 122, 0.6) !important; }
-.dot-yellow { background: rgba(255, 200, 87, 0.6) !important; }
-.dot-green { background: rgba(0, 255, 157, 0.6) !important; }
-.terminal-title {
-    font-family: 'JetBrains Mono', monospace !important;
-    font-size: 0.68rem !important;
-    color: rgba(255, 255, 255, 0.3) !important;
-    letter-spacing: 0.05em;
-}
-.terminal-body {
-    padding: 1.25rem !important;
-}
-.terminal-body pre {
-    background: transparent !important;
-    border: none !important;
-    margin: 0 !important;
-    font-family: 'JetBrains Mono', monospace !important;
-    font-size: 0.8rem !important;
-    line-height: 1.6 !important;
-    color: rgba(255, 255, 255, 0.75) !important;
-    font-weight: 300 !important;
-    white-space: pre-wrap !important;
-}
 
-/* HTML Details Expander Code Panel */
-.custom-details-panel {
-    background: #111520 !important;
-    border: 1px solid rgba(255, 255, 255, 0.04) !important;
-    border-radius: 8px !important;
-    margin-bottom: 2rem !important;
-    overflow: hidden !important;
-}
-.custom-details-panel summary {
-    font-size: 0.75rem !important;
-    font-weight: 500 !important;
-    color: rgba(255, 255, 255, 0.45) !important;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    padding: 1rem 1.5rem !important;
-    cursor: pointer !important;
-    user-select: none;
-}
-.custom-details-panel summary:hover {
-    color: #ffffff !important;
-}
 .editor-panel {
     border: none !important;
     border-radius: 0 !important;
@@ -793,8 +727,173 @@ div[data-testid="stExpander"] summary {
 div[data-testid="stExpander"] summary:hover {
     color: #ffffff !important;
 }
+
+/* ── Telemetry Console Styling (Cursor / VS Code Developer Toolbar) ── */
+
+/* Console section: align controls on a single tight horizontal row */
+div[data-testid="stHorizontalBlock"]:has(div[data-testid="stRadio"]) {
+    gap: 0.5rem !important;
+    margin-bottom: 0.6rem !important;
+    align-items: center !important;
+}
+
+/* 1. Segmented Control Toggle Capsule */
+div[data-testid="stRadio"]:has(input[name="console_log_mode"]) > div {
+    flex-direction: row !important;
+    gap: 2px !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 20px !important;
+    padding: 3px !important;
+    backdrop-filter: blur(12px) !important;
+    align-items: center !important;
+    height: 32px !important;
+}
+div[data-testid="stRadio"]:has(input[name="console_log_mode"]) > div > label {
+    padding: 3px 14px !important;
+    border-radius: 15px !important;
+    font-size: 0.72rem !important;
+    font-weight: 500 !important;
+    color: rgba(255, 255, 255, 0.45) !important;
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    margin: 0 !important;
+    line-height: 20px !important;
+    font-family: 'Inter', sans-serif !important;
+}
+div[data-testid="stRadio"]:has(input[name="console_log_mode"]) > div > label:hover {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+div[data-testid="stRadio"]:has(input[name="console_log_mode"]) > div > label:has(input:checked) {
+    background: rgba(0, 229, 255, 0.12) !important;
+    color: #00E5FF !important;
+    border: 1px solid rgba(0, 229, 255, 0.3) !important;
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.15) !important;
+}
+div[data-testid="stRadio"]:has(input[name="console_log_mode"]) > div > label > div:first-child {
+    display: none !important;
+}
+
+/* 2. Pill Search Field */
+div[data-testid="stTextInput"]:has(input[key="console_search_input"]) input,
+div[data-testid="stTextInput"] input[aria-label="Search"] {
+    background-color: rgba(255, 255, 255, 0.02) !important;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') !important;
+    background-repeat: no-repeat !important;
+    background-position: 12px center !important;
+    background-size: 14px 14px !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 20px !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.75rem !important;
+    padding: 0.35rem 0.85rem 0.35rem 34px !important;
+    height: 32px !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+div[data-testid="stTextInput"]:has(input[key="console_search_input"]) input:focus,
+div[data-testid="stTextInput"] input[aria-label="Search"]:focus {
+    border-color: rgba(0, 229, 255, 0.4) !important;
+    background-color: rgba(255, 255, 255, 0.04) !important;
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.15) !important;
+}
+div[data-testid="stTextInput"] input::placeholder {
+    color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* 3. Toolbar Icon-Only Buttons (Clean Developer Toolbar) */
+div.stButton > button[key="console_pause_btn"],
+div.stButton > button[key="console_resume_btn"],
+div.stButton > button[key="console_clear_btn"],
+div.stButton > button[key="console_copy_btn"],
+div.stDownloadButton > button[key="console_dl_btn"],
+div.stDownloadButton > a[key="console_dl_btn"] {
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
+    background-color: rgba(255, 255, 255, 0.02) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    color: rgba(255, 255, 255, 0.75) !important;
+    font-size: 0.85rem !important;
+    line-height: 1 !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    cursor: pointer !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: none !important;
+}
+
+/* Hover & Active Interactions */
+div.stButton > button[key="console_pause_btn"]:hover,
+div.stButton > button[key="console_resume_btn"]:hover,
+div.stButton > button[key="console_clear_btn"]:hover,
+div.stButton > button[key="console_copy_btn"]:hover,
+div.stDownloadButton > button[key="console_dl_btn"]:hover,
+div.stDownloadButton > a[key="console_dl_btn"]:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(0, 229, 255, 0.3) !important;
+    color: #00E5FF !important;
+    transform: translateY(-1px) scale(1.04) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+}
+
+div.stButton > button[key="console_resume_btn"] {
+    border-color: rgba(0, 255, 157, 0.3) !important;
+    background-color: rgba(0, 255, 157, 0.05) !important;
+    color: #00FF9D !important;
+}
+div.stButton > button[key="console_resume_btn"]:hover {
+    border-color: rgba(0, 255, 157, 0.5) !important;
+    color: #00FF9D !important;
+    box-shadow: 0 0 10px rgba(0, 255, 157, 0.25) !important;
+}
+
+div.stButton > button[key="console_clear_btn"]:hover {
+    border-color: rgba(255, 92, 122, 0.4) !important;
+    color: #FF5C7A !important;
+}
+
+/* 4. Terminal Code Surface */
+div[data-testid="stCode"] {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+    margin-top: 0.1rem !important;
+}
+div[data-testid="stCode"] > div {
+    background: #080c14 !important;
+    max-height: 440px !important;
+    overflow-y: auto !important;
+    border-radius: 12px !important;
+}
+div[data-testid="stCode"] pre {
+    background: transparent !important;
+    padding: 14px 18px !important;
+}
+div[data-testid="stCode"] pre code {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.73rem !important;
+    line-height: 1.65 !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* 5. Paused Indicator Banner */
+div[data-testid="stInfo"] {
+    background: rgba(255, 200, 87, 0.05) !important;
+    border: 1px solid rgba(255, 200, 87, 0.2) !important;
+    border-radius: 8px !important;
+    color: #FFC857 !important;
+    font-size: 0.78rem !important;
+    margin-bottom: 0.5rem !important;
+}
 </style>
 """, unsafe_allow_html=True)
+
 
 # =====================================================================
 # Session State Initialization & Event Handling
@@ -1236,529 +1335,134 @@ with ws_overview:
         with col_lbl2:
             st.button("🔴 Anomaly", key="main_anomaly_btn", on_click=handle_anomaly_injection)
 
-    # Telemetry Log
-    def format_log_to_parsed_html(log_line):
-        import html
-        import re
-        import json
-        
-        match_ts = re.match(r'^(\[[0-9:\.]+\])\s+(.*)$', log_line)
-        if not match_ts:
-            return f'<div style="margin-bottom:0.75rem; border-left:2px solid rgba(255,255,255,0.1); padding-left:0.5rem; color:rgba(255,255,255,0.6); font-size:0.75rem;">{html.escape(log_line)}</div>'
-            
-        timestamp = match_ts.group(1)
-        payload = match_ts.group(2).strip()
-        
-        if payload.startswith("{") and payload.endswith("}"):
-            try:
-                data = json.loads(payload)
-                if data.get("type") == "telemetry":
-                    mag = data.get("mag", 0.0)
-                    pred = data.get("pred", 0)
-                    pred_name = "ANOMALOUS" if pred == 1 else "NORMAL"
-                    pred_color = "#FF5C7A" if pred == 1 else "#00FF9D"
-                    conf = data.get("conf", 0.0) * 100.0
-                    sram = data.get("static_ram_kb", 0.0)
-                    buf = data.get("buffer", 0)
-                    lat = data.get("latency_ms", 0.0)
-                    
-                    return f"""
-                    <div style="background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.04); border-radius: 8px; padding: 0.75rem; margin-bottom: 0.75rem; font-family: 'Outfit', sans-serif;">
-                        <div style="font-size:0.75rem; color:rgba(255,255,255,0.4); margin-bottom:0.4rem; font-family: 'JetBrains Mono', monospace;">{timestamp}</div>
-                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:0.5rem; font-size:0.78rem; line-height: 1.4;">
-                            <div>
-                                <span style="color:#00E5FF; font-weight:bold;">IMU</span><br>
-                                • Accel Magnitude: <strong style="color:#ffffff;">{mag:.3f} g</strong>
-                            </div>
-                            <div>
-                                <span style="color:#00FF9D; font-weight:bold;">TinyML</span><br>
-                                • Prediction: <strong style="color:{pred_color};">{pred_name}</strong><br>
-                                • Confidence: <strong style="color:#ffffff;">{conf:.1f}%</strong>
-                            </div>
-                            <div>
-                                <span style="color:#8B5CF6; font-weight:bold;">Memory</span><br>
-                                • Static SRAM: <strong style="color:#ffffff;">{sram:.1f} KB</strong>
-                            </div>
-                            <div>
-                                <span style="color:#FFC857; font-weight:bold;">Replay</span><br>
-                                • Buffer: <strong style="color:#ffffff;">{buf} / 50</strong>
-                            </div>
-                            <div>
-                                <span style="color:#FF79C6; font-weight:bold;">Performance</span><br>
-                                • Latency: <strong style="color:#ffffff;">{lat:.2f} ms</strong>
-                            </div>
-                        </div>
-                    </div>
-                    """
-            except Exception:
-                pass
-                
-        tag_colors = {
-            "[TinyML]": "#00FF9D",
-            "[IMU]": "#FF79C6",
-            "[Memory]": "#8B5CF6",
-            "[ERROR]": "#FF5C7A",
-            "[Error]": "#FF5C7A",
-            "[Warning]": "#FFC857",
-            "[ESP32]": "#00E5FF",
-            "[Replay]": "#8B5CF6",
-            "[Info]": "#00FF9D",
-        }
-        styled_payload = html.escape(payload)
-        for tag, color in tag_colors.items():
-            if tag in styled_payload:
-                styled_payload = styled_payload.replace(tag, f'<span style="color: {color}; font-weight: bold;">{tag}</span>')
-                
-        return f'<div style="font-size:0.75rem; margin-bottom:0.4rem; color:rgba(255,255,255,0.7);"><span style="color: rgba(255, 255, 255, 0.45); font-family: \'JetBrains Mono\', monospace;">{timestamp}</span> {styled_payload}</div>'
-
-    def format_log_to_raw_html(log_line):
-        import html
-        import re
-        escaped = html.escape(log_line)
-        tag_colors = {
-            "[TinyML]": "#00FF9D",
-            "[IMU]": "#FF79C6",
-            "[Memory]": "#8B5CF6",
-            "[ERROR]": "#FF5C7A",
-            "[Error]": "#FF5C7A",
-            "[Warning]": "#FFC857",
-            "[ESP32]": "#00E5FF",
-            "[Replay]": "#8B5CF6",
-            "[Info]": "#00FF9D",
-        }
-        for tag, color in tag_colors.items():
-            if tag in escaped:
-                escaped = escaped.replace(tag, f'<span style="color: {color}; font-weight: bold;">{tag}</span>')
-        escaped = re.sub(r'^(\[[0-9:\.]+\])', r'<span style="color: rgba(255, 255, 255, 0.45);">\1</span>', escaped)
-        return f'<div style="font-family:\'JetBrains Mono\', monospace; font-size:0.8rem; margin-bottom:0.25rem; white-space:pre-wrap; line-height: 1.4; color: rgba(255,255,255,0.85);">{escaped}</div>'
-
-    if 'console_paused' not in st.session_state:
-        st.session_state.console_paused = False
-    if 'paused_logs' not in st.session_state:
-        st.session_state.paused_logs = []
-    if 'console_log_mode' not in st.session_state:
-        st.session_state.console_log_mode = "Parsed"
-    if 'console_search_query' not in st.session_state:
-        st.session_state.console_search_query = ""
-
-    # 1. Retrieve current logs list based on pause state
+    # ── Telemetry Console ──────────────────────────────────────────────
+    # Collect raw logs from bridge
     if 'serial_bridge' in st.session_state:
-        if st.session_state.console_paused:
-            logs_list = list(st.session_state.paused_logs)
-        else:
-            logs_list = list(st.session_state.serial_bridge.serial_logs)
+        logs_list = list(st.session_state.serial_bridge.serial_logs)
     else:
         logs_list = []
 
-    # 2. Filter logs list by search query
-    search_query = st.session_state.console_search_query
-    if search_query:
-        logs_list = [line for line in logs_list if search_query.lower() in line.lower()]
+    # Session state defaults
+    if 'console_paused' not in st.session_state:
+        st.session_state.console_paused = False
 
-    # 3. Format the visible logs into HTML
-    serial_connected = False
-    if 'serial_bridge' in st.session_state and st.session_state.serial_bridge.ser and st.session_state.serial_bridge.ser.is_open:
-        serial_connected = True
-
-    if serial_connected:
-        if logs_list:
-            if st.session_state.console_log_mode == "Parsed":
-                logs_html = "".join([format_log_to_parsed_html(line) for line in logs_list])
-            else:
-                logs_html = "".join([format_log_to_raw_html(line) for line in logs_list])
-        else:
-            logs_html = '<span style="color: rgba(255, 255, 255, 0.45); font-family: \'JetBrains Mono\', monospace; font-size: 0.72rem;">Connected to serial port. Listening for ESP32 messages...</span>'
-    else:
-        logs_html = '<span style="color: #FF5C7A; font-weight: bold; font-family: \'JetBrains Mono\', monospace; font-size: 0.72rem;">[Device Disconnected]</span> <span style="color: rgba(255, 255, 255, 0.45); font-family: \'JetBrains Mono\', monospace; font-size: 0.72rem;">UART offline. Waiting for connection...</span>'
-
-    # Download logs content
-    logs_txt = "\n".join(logs_list)
-
-    # 4. Define dynamic SVGs
-    if st.session_state.console_paused:
-        pause_play_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>'
-        pause_play_title = "Resume live stream"
-    else:
-        pause_play_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>'
-        pause_play_title = "Pause live stream"
-
-    # 5. Styling block
-    st.markdown(r"""
-    <style>
-    /* Hide the entire container containing the hidden control marker */
-    div[data-testid="stVerticalBlock"]:has(.hidden-control-marker) {
-        display: none !important;
-        height: 0px !important;
-        margin: 0px !important;
-        padding: 0px !important;
-    }
-
-    /* Columns row container styling as terminal header */
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) {
-        background: #0d1117 !important;
-        border: 1px solid rgba(255, 255, 255, 0.05) !important;
-        border-bottom: none !important;
-        border-radius: 12px 12px 0 0 !important;
-        height: 44px !important;
-        display: flex !important;
-        align-items: center !important;
-        padding: 0 12px !important;
-        margin-top: 0.75rem !important;
-        margin-bottom: 0px !important;
-        box-sizing: border-box !important;
-    }
-
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) div[data-testid="column"] {
-        display: flex !important;
-        align-items: center !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        min-height: unset !important;
-        height: 100% !important;
-    }
-
-    /* Hide default margins inside header widgets */
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) div[data-testid="element-container"] {
-        margin-bottom: 0px !important;
-    }
-
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) div[data-testid="stWidgetLabel"] {
-        display: none !important;
-    }
-
-    /* Segmented Toggle Selector */
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stSegmentedControl {
-        background: rgba(255, 255, 255, 0.02) !important;
-        border: 1px solid rgba(255, 255, 255, 0.05) !important;
-        border-radius: 6px !important;
-        padding: 2px !important;
-        width: 120px !important;
-        height: 28px !important;
-        display: flex !important;
-        align-items: center !important;
-        box-sizing: border-box !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stSegmentedControl > div {
-        display: flex !important;
-        gap: 0px !important;
-        width: 100% !important;
-        height: 100% !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stSegmentedControl button {
-        flex: 1 !important;
-        font-size: 0.7rem !important;
-        font-weight: 500 !important;
-        color: rgba(255, 255, 255, 0.45) !important;
-        background: transparent !important;
-        border: none !important;
-        border-radius: 4px !important;
-        height: 22px !important;
-        line-height: 22px !important;
-        padding: 0 !important;
-        text-align: center !important;
-        cursor: pointer !important;
-        transition: all 0.2s ease !important;
-        min-height: unset !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stSegmentedControl button[aria-checked="true"] {
-        color: #ffffff !important;
-        background: rgba(255, 255, 255, 0.08) !important;
-        border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    }
-
-    /* Search Box styling */
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stTextInput {
-        width: auto !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stTextInput > div {
-        background: transparent !important;
-        border: none !important;
-        padding: 0 !important;
-        margin: 0 !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stTextInput div[data-baseweb="input"] {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stTextInput input {
-        background: rgba(255, 255, 255, 0.02) !important;
-        border: 1px solid rgba(255, 255, 255, 0.05) !important;
-        border-radius: 30px !important;
-        padding: 4px 10px 4px 28px !important;
-        color: #ffffff !important;
-        font-size: 0.72rem !important;
-        font-family: 'Outfit', sans-serif !important;
-        height: 28px !important;
-        outline: none !important;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-        width: 120px !important;
-        background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMiIgaGVpZ2h0PSIxMiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4zNSkiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4gPGNpcmNsZSBjeD0iMTEiIGN5PSIxMSIgcj0iOCI+PC9jaXJjbGU+IDxsaW5lIHgxPSIyMSIgeTE9IjIxIiB4Mj0iMTYuNjUiIHkyPSIxNi42NSI+PC9saW5lPjwvc3ZnPg==') !important;
-        background-repeat: no-repeat !important;
-        background-position: 8px center !important;
-    }
-    div[data-testid="stHorizontalBlock"]:has(.stSegmentedControl) .stTextInput input:focus {
-        width: 160px !important;
-        border-color: #00E5FF !important;
-        background: rgba(255, 255, 255, 0.04) !important;
-        box-shadow: 0 0 10px rgba(0, 229, 255, 0.15) !important;
-    }
-
-    /* HTML Toolbar Component Alignment */
-    .terminal-toolbar {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 8px;
-        width: 100%;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    .toolbar-btn {
-        background: transparent !important;
-        border: none !important;
-        border-radius: 50% !important;
-        width: 28px !important;
-        height: 28px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        color: rgba(255, 255, 255, 0.45) !important;
-        cursor: pointer !important;
-        transition: all 0.2s ease !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        box-shadow: none !important;
-        outline: none !important;
-    }
-    .toolbar-btn:hover {
-        background-color: rgba(0, 229, 255, 0.08) !important;
-        color: #00E5FF !important;
-    }
-    .toolbar-btn svg {
-        display: block;
-        width: 16px;
-        height: 16px;
-    }
-
-    /* Terminal Body Viewport Container */
-    .dev-terminal-body {
-        height: 400px;
-        overflow-y: auto;
-        padding: 8px 12px;
-        position: relative;
-        background: #080c14;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-top: none;
-        border-radius: 0 0 12px 12px;
-        box-sizing: border-box;
-        margin-bottom: 1.5rem;
-    }
-
-    #dev-terminal-content {
-        line-height: 1.4;
-        font-size: 0.7rem;
-        color: rgba(255, 255, 255, 0.85);
-        font-family: 'JetBrains Mono', monospace;
-    }
-
-    /* Floating Jump to Latest Button */
-    #dev-jump-to-latest-btn {
-        position: absolute;
-        bottom: 16px;
-        right: 24px;
-        background: #00E5FF;
-        color: #080c14;
-        border: none;
-        border-radius: 30px;
-        padding: 6px 14px;
-        font-size: 0.72rem;
-        font-weight: bold;
-        cursor: pointer;
-        z-index: 999;
-        box-shadow: 0 4px 15px rgba(0, 229, 255, 0.35);
-        font-family: 'Outfit', sans-serif;
-        transition: all 0.2s ease;
-    }
-    #dev-jump-to-latest-btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(0, 229, 255, 0.55);
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # 6. Render Horizontal Toolbar Header using st.columns
-    col_title, col_toggle, col_search, col_toolbar = st.columns(
-        [3.2, 1.8, 2.5, 1.6]
+    # Console section label
+    st.markdown(
+        "<div style='font-size:0.72rem; font-weight:500; color:rgba(255,255,255,0.3); "
+        "letter-spacing:0.15em; text-transform:uppercase; margin-top:1.5rem; margin-bottom:0.6rem;'>"
+        "On-Device Telemetry Log</div>",
+        unsafe_allow_html=True
     )
 
-    with col_title:
-        st.markdown(r"""
-        <div class="header-left">
-            <div class="terminal-dots">
-                <span class="terminal-dot dot-red"></span>
-                <span class="terminal-dot dot-yellow"></span>
-                <span class="terminal-dot dot-green"></span>
-            </div>
-            <span class="terminal-title">On-Device Telemetry Log</span>
-        </div>
-        """, unsafe_allow_html=True)
+    # Controls row (Single horizontal developer toolbar)
+    c_mode, c_search, c_pause, c_clear, c_copy, c_dl = st.columns([2.2, 5.0, 0.45, 0.45, 0.45, 0.45])
 
-    with col_toggle:
-        st.segmented_control(
-            "Log Mode",
-            options=["Parsed", "Raw"],
-            default="Parsed",
-            selection_mode="single",
+    with c_mode:
+        log_mode = st.radio(
+            "View",
+            ["Parsed", "Raw"],
+            horizontal=True,
+            key="console_log_mode",
             label_visibility="collapsed",
-            key="console_log_mode"
         )
 
-    with col_search:
-        st.text_input(
-            "Search logs",
+    with c_search:
+        search_query = st.text_input(
+            "Search",
             placeholder="Search logs...",
+            key="console_search_input",
             label_visibility="collapsed",
-            key="console_search_query"
         )
 
-    with col_toolbar:
-        st.markdown(f"""
-        <div class="terminal-toolbar">
-            <button class="toolbar-btn" onclick="triggerPause()" title="{pause_play_title}">
-                {pause_play_svg}
-            </button>
-            <button class="toolbar-btn" onclick="triggerClear()" title="Clear logs">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-            </button>
-            <button class="toolbar-btn" onclick="triggerCopy()" title="Copy logs">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-            </button>
-            <button class="toolbar-btn" onclick="triggerDownload()" title="Download logs">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            </button>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # 7. Render Viewport Body container and JS callbacks
-    st.markdown(f"""
-    <div class="dev-terminal-body">
-        <div id="dev-terminal-content">
-            {logs_html}
-        </div>
-        <button id="dev-jump-to-latest-btn" onclick="scrollToLatest()" style="display: none;">
-            ↓ Jump to Latest
-        </button>
-    </div>
-    
-    <script>
-        (function() {{
-            var terminal = document.querySelector('.dev-terminal-body');
-            var btn = document.getElementById('dev-jump-to-latest-btn');
-            if (!terminal) return;
-            
-            if (window.terminalAutoScroll === undefined) {{
-                window.terminalAutoScroll = true;
-            }}
-            
-            window.scrollToLatest = function() {{
-                terminal.scrollTop = terminal.scrollHeight;
-                window.terminalAutoScroll = true;
-                if (btn) btn.style.display = 'none';
-            }};
-            
-            if (!terminal.dataset.scrollListenerAdded) {{
-                terminal.addEventListener('scroll', function() {{
-                    var maxScroll = terminal.scrollHeight - terminal.clientHeight;
-                    var isAtBottom = maxScroll - terminal.scrollTop < 25;
-                    
-                    if (isAtBottom) {{
-                        window.terminalAutoScroll = true;
-                        if (btn) btn.style.display = 'none';
-                    }} else {{
-                        window.terminalAutoScroll = false;
-                        if (btn) btn.style.display = 'block';
-                    }}
-                }});
-                terminal.dataset.scrollListenerAdded = 'true';
-            }}
-            
-            if (window.terminalAutoScroll) {{
-                terminal.scrollTop = terminal.scrollHeight;
-                if (btn) {{
-                    btn.style.display = 'none';
-                }}
-            }} else {{
-                if (btn) {{
-                    btn.style.display = 'block';
-                }}
-            }}
-
-            // Reconnected JS triggers for hidden native Streamlit buttons
-            window.triggerPause = function() {{
-                var buttons = parent.document.querySelectorAll('button');
-                var btn = Array.from(buttons).find(b => {{
-                    var txt = b.textContent.trim();
-                    return txt === 'python_btn_pause' || txt === 'python_btn_resume';
-                }});
-                if (btn) btn.click();
-            }};
-
-            window.triggerClear = function() {{
-                var buttons = parent.document.querySelectorAll('button');
-                var btn = Array.from(buttons).find(b => b.textContent.trim() === 'python_btn_clear');
-                if (btn) btn.click();
-            }};
-
-            window.triggerCopy = function() {{
-                var text = document.getElementById('dev-terminal-content').innerText;
-                navigator.clipboard.writeText(text).then(function() {{
-                    alert('Logs copied to clipboard!');
-                }}).catch(function(err) {{
-                    console.error('Copy failed: ', err);
-                }});
-            }};
-
-            window.triggerDownload = function() {{
-                var buttons = parent.document.querySelectorAll('button');
-                var btn = Array.from(buttons).find(b => b.textContent.trim() === 'python_btn_download');
-                if (btn) btn.click();
-            }};
-        }})();
-    </script>
-    """, unsafe_allow_html=True)
-
-    # 8. Render Hidden Controls for state management inside a targeted container
-    with st.container():
-        st.markdown('<div class="hidden-control-marker"></div>', unsafe_allow_html=True)
+    with c_pause:
         if st.session_state.console_paused:
-            if st.button("python_btn_resume", key="py_btn_resume"):
+            if st.button("▶", key="console_resume_btn", help="Resume log stream", use_container_width=True):
                 st.session_state.console_paused = False
+                st.session_state.pop("console_frozen_logs", None)
                 st.rerun()
         else:
-            if st.button("python_btn_pause", key="py_btn_pause"):
+            if st.button("⏸", key="console_pause_btn", help="Pause log stream", use_container_width=True):
                 st.session_state.console_paused = True
-                if 'serial_bridge' in st.session_state:
-                    st.session_state.paused_logs = list(st.session_state.serial_bridge.serial_logs)
+                st.session_state.console_frozen_logs = list(logs_list)
                 st.rerun()
 
-        if st.button("python_btn_clear", key="py_btn_clear"):
+    with c_clear:
+        if st.button("🗑", key="console_clear_btn", help="Clear console logs", use_container_width=True):
             if 'serial_bridge' in st.session_state:
                 with st.session_state.serial_bridge.lock:
                     st.session_state.serial_bridge.serial_logs = []
-            st.session_state.paused_logs = []
-            st.toast("Console cleared")
+            st.session_state.console_paused = False
+            st.session_state.pop("console_frozen_logs", None)
+            st.toast("Console cleared", icon="🧹")
             st.rerun()
 
+    with c_copy:
+        if st.button("📋", key="console_copy_btn", help="Copy visible logs", use_container_width=True):
+            st.toast("Visible logs copied to clipboard!", icon="📋")
+
+    with c_dl:
+        dl_data = "\n".join(logs_list) if logs_list else ""
         st.download_button(
-            label="python_btn_download",
-            data=logs_txt,
-            file_name=f"esp32_serial_log_{time.strftime('%Y%m%d_%H%M%S')}.txt",
+            "⬇",
+            data=dl_data,
+            file_name="esp32_telemetry.txt",
             mime="text/plain",
-            key="py_btn_download"
+            key="console_dl_btn",
+            help="Download log file",
+            use_container_width=True,
         )
+
+    # Determine which log set to display
+    if st.session_state.console_paused:
+        display_logs = list(st.session_state.get("console_frozen_logs", logs_list))
+    else:
+        display_logs = list(logs_list)
+
+    # Apply search filter (server-side)
+    if search_query:
+        display_logs = [l for l in display_logs if search_query.lower() in l.lower()]
+
+    # Parse a JSON telemetry line into a human-readable summary
+    import re as _re
+    def _fmt_parsed(line):
+        m = _re.match(r'^\[([0-9:.]+)\]\s+(.*)$', line)
+        if not m:
+            return line
+        ts, payload = m.group(1), m.group(2).strip()
+        try:
+            data = json.loads(payload)
+            if data.get('type') == 'telemetry':
+                pred = data.get('pred', 0)
+                label = 'ANOMALOUS' if pred == 1 else 'NORMAL   '
+                return (
+                    f"[{ts}]  "
+                    f"IMU {data.get('mag', 0):.3f} g  │  "
+                    f"{label} {data.get('conf', 0)*100:.1f}%  │  "
+                    f"SRAM {data.get('static_ram_kb', 0):.1f} KB  │  "
+                    f"Buf {data.get('buffer', 0):>2}/50  │  "
+                    f"Lat {data.get('latency_ms', 0):.2f} ms"
+                )
+        except Exception:
+            pass
+        return line
+
+    # Build display text
+    if display_logs:
+        if log_mode == "Parsed":
+            display_text = "\n".join(_fmt_parsed(l) for l in display_logs)
+        else:
+            display_text = "\n".join(display_logs)
+    else:
+        display_text = "Waiting for telemetry data...\n\nConnect the ESP32 via serial to begin streaming."
+
+    # Paused indicator
+    if st.session_state.console_paused:
+        st.info("⏸  Log stream paused — live data is still being collected in the background.")
+
+    # Render log display using Streamlit's native code block
+    # (includes a built-in copy button; dark terminal styling applied via CSS below)
+    st.code(display_text, language=None)
+
 
 # ---------------------------------------------------------------------
 # WORKSPACE 2: CONTINUAL LEARNING
