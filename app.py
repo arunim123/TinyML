@@ -21,6 +21,7 @@ if not in_venv and os.path.exists(venv_python):
 # If we are here, we are running in the virtual environment.
 try:
     import streamlit as st
+    import streamlit.components.v1 as components
     import streamlit.web.cli as stcli
 except ImportError as e:
     sys.stderr.write(f"Error: Required dependencies not found in virtual environment: {e}\n")
@@ -974,34 +975,45 @@ with st.sidebar:
 # Telemetry Stream Updates
 # ---------------------------------------------------------------------
 if serial_connected:
-    telem = st.session_state.serial_bridge.get_latest_telemetry()
-    count = telem.get("count", 0)
-    
-    if count != st.session_state.get("last_processed_count", -1):
+    queued_telemetry = []
+    if hasattr(st.session_state.serial_bridge, "get_all_queued_telemetry"):
+        queued_telemetry = st.session_state.serial_bridge.get_all_queued_telemetry()
+
+    if not queued_telemetry:
+        latest = st.session_state.serial_bridge.get_latest_telemetry()
+        if latest.get("count", 0) != st.session_state.get("last_processed_count", -1):
+            queued_telemetry = [latest]
+
+    if queued_telemetry:
+        new_rows = []
         current_time = time.time()
-        mag = telem.get("mag", 1.0)
-        pred = telem.get("pred", 0)
-        conf = telem.get("conf", 0.95) * 100.0
-        lat = telem.get("latency_ms", 1.8)
-        buf_c = telem.get("buffer", 0)
-        pred_name = "ANOMALOUS" if pred == 1 else "NORMAL"
+        for telem in queued_telemetry:
+            count = telem.get("count", 0)
+            if count != st.session_state.get("last_processed_count", -1):
+                mag = telem.get("mag", 1.0)
+                pred = telem.get("pred", 0)
+                conf = telem.get("conf", 0.95) * 100.0
+                lat = telem.get("latency_ms", 1.8)
+                buf_c = telem.get("buffer", 0)
+                pred_name = "ANOMALOUS" if pred == 1 else "NORMAL"
+                
+                new_rows.append({
+                    "Timestamp": current_time,
+                    "Count": count,
+                    "Magnitude_g": round(mag, 3),
+                    "Pred_Label": pred,
+                    "Pred_Name": pred_name,
+                    "Confidence": round(min(max(conf, 50.0), 99.9), 1),
+                    "Latency_ms": round(lat, 2),
+                    "Buffer_Count": buf_c
+                })
+                st.session_state.last_processed_count = count
         
-        new_entry = pd.DataFrame([{
-            "Timestamp": current_time,
-            "Count": count,
-            "Magnitude_g": round(mag, 3),
-            "Pred_Label": pred,
-            "Pred_Name": pred_name,
-            "Confidence": round(min(max(conf, 50.0), 99.9), 1),
-            "Latency_ms": round(lat, 2),
-            "Buffer_Count": buf_c
-        }])
-        
-        st.session_state.vibration_history = pd.concat([st.session_state.vibration_history, new_entry], ignore_index=True)
-        if len(st.session_state.vibration_history) > 20:
-            st.session_state.vibration_history = st.session_state.vibration_history.iloc[1:].reset_index(drop=True)
-            
-        st.session_state.last_processed_count = count
+        if new_rows:
+            new_df = pd.DataFrame(new_rows)
+            st.session_state.vibration_history = pd.concat([st.session_state.vibration_history, new_df], ignore_index=True)
+            if len(st.session_state.vibration_history) > 50:
+                st.session_state.vibration_history = st.session_state.vibration_history.iloc[-50:].reset_index(drop=True)
 
 if len(st.session_state.vibration_history) > 0:
     latest_data = st.session_state.vibration_history.iloc[-1]
@@ -1422,8 +1434,10 @@ with ws_overview:
     if search_query:
         display_logs = [l for l in display_logs if search_query.lower() in l.lower()]
 
-    # Parse a JSON telemetry line into a human-readable summary
+    # Parse a JSON telemetry line into a human-readable summary (plain text & HTML)
     import re as _re
+    import html as _html
+
     def _fmt_parsed(line):
         m = _re.match(r'^\[([0-9:.]+)\]\s+(.*)$', line)
         if not m:
@@ -1446,22 +1460,243 @@ with ws_overview:
             pass
         return line
 
-    # Build display text
+    def _fmt_parsed_html(line):
+        m = _re.match(r'^\[([0-9:.]+)\]\s+(.*)$', line)
+        if not m:
+            return _html.escape(line)
+        ts, payload = m.group(1), m.group(2).strip()
+        try:
+            data = json.loads(payload)
+            if data.get('type') == 'telemetry':
+                pred = data.get('pred', 0)
+                if pred == 1:
+                    lbl_html = '<span style="color:#FF5C7A; font-weight:700; background:rgba(255,92,122,0.12); padding:1px 5px; border-radius:3px;">ANOMALOUS</span>'
+                else:
+                    lbl_html = '<span style="color:#00FF9D; font-weight:600; background:rgba(0,255,157,0.08); padding:1px 5px; border-radius:3px;">NORMAL   </span>'
+                
+                mag = data.get('mag', 0)
+                conf = data.get('conf', 0) * 100
+                sram = data.get('static_ram_kb', 0)
+                buf = data.get('buffer', 0)
+                lat = data.get('latency_ms', 0)
+
+                return (
+                    f'<span style="color:#00E5FF;">[{_html.escape(ts)}]</span>  '
+                    f'IMU <span style="color:#FFFFFF;">{mag:.3f}</span> g  │  '
+                    f'{lbl_html} <span style="color:#E0E0E0;">{conf:.1f}%</span>  │  '
+                    f'SRAM <span style="color:#8A99AD;">{sram:.1f}</span> KB  │  '
+                    f'Buf <span style="color:#8A99AD;">{buf:>2}/50</span>  │  '
+                    f'Lat <span style="color:#8A99AD;">{lat:.2f}</span> ms'
+                )
+        except Exception:
+            pass
+        return _html.escape(line)
+
+    # Build display text & HTML content
     if display_logs:
         if log_mode == "Parsed":
             display_text = "\n".join(_fmt_parsed(l) for l in display_logs)
+            html_body_content = "\n".join(_fmt_parsed_html(l) for l in display_logs)
         else:
             display_text = "\n".join(display_logs)
+            html_body_content = "\n".join(_html.escape(l) for l in display_logs)
     else:
         display_text = "Waiting for telemetry data...\n\nConnect the ESP32 via serial to begin streaming."
+        html_body_content = '<div style="color:rgba(255,255,255,0.45); padding: 1rem 0;">Waiting for telemetry data...<br><br>Connect the ESP32 via serial to begin streaming.</div>'
 
     # Paused indicator
     if st.session_state.console_paused:
         st.info("⏸  Log stream paused — live data is still being collected in the background.")
 
-    # Render log display using Streamlit's native code block
-    # (includes a built-in copy button; dark terminal styling applied via CSS below)
-    st.code(display_text, language=None)
+    # Custom Terminal Component with auto-scroll container
+    is_paused_js = "true" if st.session_state.console_paused else "false"
+    status_badge_class = "status-paused" if st.session_state.console_paused else "status-live"
+    status_badge_text = "PAUSED" if st.session_state.console_paused else "LIVE AUTO-SCROLL"
+
+    console_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        * {{
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }}
+        body {{
+          background-color: transparent;
+          font-family: 'JetBrains Mono', 'Fira Code', 'Roboto Mono', 'Cascadia Code', monospace;
+          color: rgba(255, 255, 255, 0.85);
+          overflow: hidden;
+        }}
+        .terminal-container {{
+          position: relative;
+          background: #080c14;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 12px;
+          box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6), 0 10px 30px rgba(0, 0, 0, 0.35);
+          height: 380px;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }}
+        .terminal-header {{
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 8px 14px;
+          background: rgba(255, 255, 255, 0.025);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+          font-size: 0.68rem;
+          color: rgba(255, 255, 255, 0.4);
+          user-select: none;
+        }}
+        .terminal-dots {{
+          display: flex;
+          gap: 6px;
+        }}
+        .dot {{
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+        }}
+        .dot-red {{ background: #FF5C7A; opacity: 0.8; }}
+        .dot-yellow {{ background: #FFC857; opacity: 0.8; }}
+        .dot-green {{ background: #00FF9D; opacity: 0.8; }}
+        .terminal-title {{
+          letter-spacing: 0.1em;
+          font-weight: 500;
+          font-size: 0.66rem;
+          color: rgba(255, 255, 255, 0.45);
+        }}
+        .status-badge {{
+          font-size: 0.62rem;
+          font-weight: 600;
+          padding: 2px 8px;
+          border-radius: 10px;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+        }}
+        .status-live {{
+          background: rgba(0, 255, 157, 0.08);
+          color: #00FF9D;
+          border: 1px solid rgba(0, 255, 157, 0.25);
+        }}
+        .status-paused {{
+          background: rgba(255, 200, 87, 0.08);
+          color: #FFC857;
+          border: 1px solid rgba(255, 200, 87, 0.25);
+        }}
+        .terminal-body {{
+          flex: 1;
+          overflow-y: auto;
+          padding: 12px 16px;
+          font-size: 0.73rem;
+          line-height: 1.65;
+          white-space: pre-wrap;
+          word-break: break-all;
+        }}
+        .terminal-body::-webkit-scrollbar {{
+          width: 7px;
+        }}
+        .terminal-body::-webkit-scrollbar-track {{
+          background: rgba(0, 0, 0, 0.25);
+        }}
+        .terminal-body::-webkit-scrollbar-thumb {{
+          background: rgba(255, 255, 255, 0.15);
+          border-radius: 4px;
+        }}
+        .terminal-body::-webkit-scrollbar-thumb:hover {{
+          background: rgba(0, 229, 255, 0.4);
+        }}
+        .scroll-bottom-btn {{
+          position: absolute;
+          bottom: 12px;
+          right: 18px;
+          background: rgba(8, 12, 20, 0.9);
+          border: 1px solid rgba(0, 229, 255, 0.5);
+          color: #00E5FF;
+          padding: 5px 14px;
+          border-radius: 20px;
+          font-size: 0.68rem;
+          font-family: inherit;
+          font-weight: 600;
+          cursor: pointer;
+          display: none;
+          box-shadow: 0 4px 14px rgba(0,0,0,0.7);
+          transition: all 0.2s ease;
+          backdrop-filter: blur(6px);
+        }}
+        .scroll-bottom-btn:hover {{
+          background: rgba(0, 229, 255, 0.2);
+          transform: translateY(-1px);
+        }}
+      </style>
+    </head>
+    <body>
+      <div class="terminal-container">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+          </div>
+          <div class="terminal-title">ESP32 TELEMETRY CONSOLE</div>
+          <div id="status-badge" class="status-badge {status_badge_class}">
+            {status_badge_text}
+          </div>
+        </div>
+        <div id="terminal-body" class="terminal-body">{html_body_content}</div>
+        <button id="scroll-btn" class="scroll-bottom-btn">⬇ Jump to latest</button>
+      </div>
+      <script>
+        const isPaused = {is_paused_js};
+        const body = document.getElementById('terminal-body');
+        const scrollBtn = document.getElementById('scroll-btn');
+
+        const savedScrollTop = sessionStorage.getItem('console_scroll_top');
+        const userScrolledUp = sessionStorage.getItem('console_user_scrolled_up') === 'true';
+
+        if (isPaused) {{
+          if (savedScrollTop !== null) {{
+            body.scrollTop = parseFloat(savedScrollTop);
+          }}
+        }} else {{
+          if (userScrolledUp && savedScrollTop !== null) {{
+            body.scrollTop = parseFloat(savedScrollTop);
+            scrollBtn.style.display = 'block';
+          }} else {{
+            body.scrollTop = body.scrollHeight;
+            scrollBtn.style.display = 'none';
+          }}
+        }}
+
+        body.addEventListener('scroll', () => {{
+          sessionStorage.setItem('console_scroll_top', body.scrollTop);
+          const isAtBottom = (body.scrollHeight - body.scrollTop - body.clientHeight) < 25;
+          if (isAtBottom) {{
+            sessionStorage.setItem('console_user_scrolled_up', 'false');
+            scrollBtn.style.display = 'none';
+          }} else {{
+            if (!isPaused) {{
+              sessionStorage.setItem('console_user_scrolled_up', 'true');
+              scrollBtn.style.display = 'block';
+            }}
+          }}
+        }});
+
+        scrollBtn.addEventListener('click', () => {{
+          sessionStorage.setItem('console_user_scrolled_up', 'false');
+          body.scrollTop = body.scrollHeight;
+          scrollBtn.style.display = 'none';
+        }});
+      </script>
+    </body>
+    </html>
+    """
+
+    components.html(console_html, height=395)
 
 
 # ---------------------------------------------------------------------
@@ -1679,6 +1914,6 @@ with ws_deploy:
 
 # Live stream rerun loop — authoritative source is session state
 if st.session_state.get("main_live_stream_toggle", True):
-    time.sleep(0.5)
+    time.sleep(0.15)
     st.rerun()
 

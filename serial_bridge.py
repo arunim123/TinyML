@@ -300,6 +300,15 @@ class ESP32SerialBridge:
         with self.lock:
             return dict(self.latest_telemetry)
 
+    def get_all_queued_telemetry(self):
+        items = []
+        while not self.history_queue.empty():
+            try:
+                items.append(self.history_queue.get_nowait())
+            except Exception:
+                break
+        return items
+
     def get_connection_info(self):
         with self.lock:
             uptime_str = self.uptime
