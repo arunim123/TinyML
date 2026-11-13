@@ -195,7 +195,7 @@ The paper and the benchmark scripts are not part of this repository, so these nu
 - **Weights and the host training script.** The checked-in `main/weights.h` pairs with the per-window-standardised core and includes a trained classifier head. `tools/train_vibration_model.py` and `tools/weights.json` predate that standardisation step; regenerating `weights.h` with `tools/codegen.py` will produce weights that do not match the current firmware until the training script applies the same standardisation.
 - **Telemetry RAM field.** `main/main.c` still reports a hardcoded `static_ram_kb` of 33.6 and `app.py` displays that figure; the corrected engine total is about 34.1 KB plus task stacks. These should read from `tiny_cl_get_stats`.
 - **Firmware not compiled in CI.** The ESP-IDF build was not run when branches were merged; the desktop simulation and Python syntax were checked.
-- **Data.** The simulator and the legacy demo use synthetic signals.
+- **Data.** The desktop simulator and the legacy demo use synthetic signals. The firmware itself has been run on a real ESP32 with a real IMU sensor.
 
 ---
 
