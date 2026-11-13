@@ -188,7 +188,7 @@ void app_main(void)
     s_adapt_sem = xSemaphoreCreateBinaryStatic(&s_adapt_sem_cb);
 
     // Initialize TinyCL model engine
-    tiny_cl_init(true);
+    tiny_cl_init(TINY_CL_UPDATE_SORT);
 
     // Initialize I2C IMU Driver
     esp_err_t err = imu_init(DEFAULT_I2C_SDA_PIN, DEFAULT_I2C_SCL_PIN, DEFAULT_I2C_FREQ_HZ);

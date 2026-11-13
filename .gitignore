@@ -76,3 +76,9 @@ Desktop.ini
 *.workspace # General workspace files, can be from various tools
 *.suo       # Visual Studio Solution User Options
 *.sln.docstates # Visual Studio
+
+# build artifacts
+tools/desktop_sim
+tools/desktop_sim.exe
+tinyml_c
+__pycache__/
