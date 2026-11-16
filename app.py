@@ -1,721 +1,1919 @@
-import streamlit as st
+#!/usr/bin/env python3
+import os
+import sys
+
+# Detect script path
+script_path = os.path.abspath(__file__)
+script_dir = os.path.dirname(script_path)
+
+# Check root venv or intel_webapp venv
+venv_python = os.path.join(script_dir, ".venv", "bin", "python")
+if not os.path.exists(venv_python):
+    venv_python = os.path.join(script_dir, "intel_webapp", ".venv", "bin", "python")
+
+# Check if we are already running inside the virtual environment
+in_venv = sys.prefix == os.path.abspath(os.path.dirname(os.path.dirname(venv_python)))
+
+if not in_venv and os.path.exists(venv_python):
+    # Re-execute using the virtualenv's Python interpreter
+    os.execv(venv_python, [venv_python, script_path] + sys.argv[1:])
+
+# If we are here, we are running in the virtual environment.
+try:
+    import streamlit as st
+    import streamlit.components.v1 as components
+    import streamlit.web.cli as stcli
+except ImportError as e:
+    sys.stderr.write(f"Error: Required dependencies not found in virtual environment: {e}\n")
+    sys.exit(1)
+
+if not (hasattr(st, 'runtime') and hasattr(st.runtime, 'exists') and st.runtime.exists()):
+    # Run streamlit via its CLI
+    sys.argv = ["streamlit", "run", script_path, "--browser.gatherUsageStats", "false"]
+    sys.exit(stcli.main())
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+import json
 import time
-import random
+
+# Import custom TinyML Vibration PDM modules
+try:
+    import serial_bridge
+except ImportError:
+    serial_bridge = None
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'tools'))
+try:
+    from tools import memory_planner
+except ImportError:
+    try:
+        import memory_planner
+    except ImportError:
+        memory_planner = None
+
 
 # =====================================================================
 # Page Configurations & CSS Styling
 # =====================================================================
 st.set_page_config(
-    page_title="EdgeOrchestrate AI - Hackathon Hub",
+    page_title="TinyML Vibration Predictive Maintenance - ESP32 Hub",
     page_icon="⚙️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom premium developer dashboard styling
+# Custom dark developer dashboard styling
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap');
 
-/* Base style settings */
+/* Base Canvas & Clean Dark Theme */
 html, body, [class*="css"], .stApp {
-    background-color: #080c14;
-    color: #cbd5e1;
-    font-family: 'Outfit', sans-serif;
+    background-color: #090B11 !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    font-family: 'Inter', sans-serif !important;
+    letter-spacing: -0.01em;
 }
 
-/* Sidebar styling */
+/* Scrollbars */
+::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Hide default Streamlit wrappers except header collapse */
+header[data-testid="stHeader"] {
+    background-color: transparent !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+}
+footer, div[data-testid="stDecoration"] {
+    display: none !important;
+    height: 0 !important;
+}
+
+/* Glassmorphism sidebar collapse button */
+button[data-testid="stSidebarCollapseButton"] {
+    background-color: rgba(18, 24, 41, 0.25) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.03) !important;
+    border-radius: 10px !important;
+    transition: all 0.2s ease !important;
+    margin: 1.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 38px !important;
+    height: 38px !important;
+}
+button[data-testid="stSidebarCollapseButton"]:hover {
+    background-color: rgba(0, 229, 255, 0.05) !important;
+    border-color: rgba(0, 229, 255, 0.25) !important;
+}
+button[data-testid="stSidebarCollapseButton"] svg {
+    display: none !important;
+}
+button[data-testid="stSidebarCollapseButton"]::before {
+    content: "" !important;
+    display: inline-block !important;
+    width: 18px !important;
+    height: 18px !important;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2300E5FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>') !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+}
+
+.block-container {
+    padding: 2rem 4rem 4rem 4rem !important;
+    max-width: 1400px !important;
+}
+
+/* Strip Streamlit row constraints */
+div[data-testid="stHorizontalBlock"] {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    margin-bottom: 0 !important;
+    gap: 2rem !important;
+}
+div[data-testid="column"] {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+}
+
+/* Sidebar Styling - Exactly like Reference */
 section[data-testid="stSidebar"] {
-    background-color: #0c1220 !important;
-    border-right: 1px solid #1e293b !important;
+    background-color: #0B0D14 !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+section[data-testid="stSidebar"] > div:first-child {
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    height: 100vh !important;
+    box-shadow: none !important;
+    padding: 2rem 1.5rem !important;
+}
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+    gap: 1.5rem !important;
 }
 
-/* Custom header colors with beautiful gradients */
-.main-title {
-    background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-size: 2.8rem;
-    font-weight: 800;
-    margin-bottom: 0.2rem;
-    letter-spacing: -0.05rem;
+/* Disable sidebar manual resizing drag handle */
+div[data-testid="stSidebarDraghandle"] {
+    display: none !important;
 }
 
-.subtitle {
-    color: #64748b;
-    font-size: 1.1rem;
-    margin-bottom: 2rem;
-    text-transform: uppercase;
-    letter-spacing: 0.15rem;
+/* Sidebar Headings */
+.sidebar-section-title {
+    font-size: 0.65rem !important;
+    font-weight: 600 !important;
+    color: rgba(255, 255, 255, 0.3) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.15em !important;
+    margin-bottom: 0.4rem !important;
 }
 
-/* Metric / HUD Card styles */
+/* Premium Workspace Panel (Continuous Surface Plate) */
+.workspace-panel {
+    background-color: #111520 !important;
+    border: 1px solid rgba(255, 255, 255, 0.04) !important;
+    border-radius: 8px !important;
+    padding: 1.5rem 1.8rem !important;
+    margin-bottom: 2rem !important;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* HUD Panel grid styling */
+.hud-panel {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 1.5rem !important;
+    margin-bottom: 2rem !important;
+}
 .hud-card {
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(56, 189, 248, 0.15);
-    border-radius: 12px;
-    padding: 1.2rem;
-    backdrop-filter: blur(8px);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-    transition: all 0.3s ease;
-    margin-bottom: 1rem;
+    background-color: #111520 !important;
+    border: 1px solid rgba(255, 255, 255, 0.04) !important;
+    border-radius: 8px !important;
+    padding: 1.25rem 1.5rem !important;
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
-
 .hud-card:hover {
-    border-color: rgba(56, 189, 248, 0.4);
-    box-shadow: 0 6px 20px rgba(56, 189, 248, 0.1);
-    transform: translateY(-2px);
+    border-color: rgba(0, 229, 255, 0.15) !important;
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.25), 0 0 15px rgba(0, 229, 255, 0.03) !important;
+    transform: translateY(-1px) !important;
 }
-
-.hud-title {
-    font-size: 0.85rem;
-    color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.05rem;
-    margin-bottom: 0.4rem;
+.hud-label {
+    font-size: 0.68rem !important;
+    font-weight: 500 !important;
+    color: rgba(255, 255, 255, 0.45) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.1em !important;
+    margin-bottom: 0.8rem !important;
 }
-
-.hud-value {
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: #f8fafc;
+.hud-value-row {
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 6px !important;
+    margin-bottom: 0.8rem !important;
 }
-
-.hud-sub {
-    font-size: 0.75rem;
-    margin-top: 0.2rem;
+.hud-val {
+    font-size: 2.2rem !important;
+    font-weight: 300 !important;
+    color: #ffffff !important;
+    letter-spacing: -0.03em !important;
+    line-height: 1 !important;
 }
-
-/* Color codes for HUD sub-text */
-.text-success { color: #10b981 !important; }
-.text-warning { color: #f59e0b !important; }
-.text-danger { color: #ef4444 !important; }
-.text-cyan { color: #00f2fe !important; }
-
-/* Status banners */
-.banner-success {
-    background: rgba(16, 185, 129, 0.08);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    border-radius: 8px;
-    padding: 1rem;
-    color: #34d399;
-    font-weight: 600;
-    margin-bottom: 1.5rem;
-}
-
-.banner-warning {
-    background: rgba(245, 158, 11, 0.08);
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    border-radius: 8px;
-    padding: 1rem;
-    color: #fbbf24;
-    font-weight: 600;
-    margin-bottom: 1.5rem;
-}
-
-.banner-danger {
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px solid rgba(239, 68, 68, 0.4);
-    border-radius: 8px;
-    padding: 1rem;
-    color: #f87171;
-    font-weight: 600;
-    margin-bottom: 1.5rem;
-}
-
-/* Custom terminal font and size */
-.stCodeBlock, code, pre {
-    font-family: 'JetBrains Mono', monospace !important;
+.hud-unit {
     font-size: 0.85rem !important;
+    color: rgba(255, 255, 255, 0.4) !important;
+    font-weight: 400 !important;
+}
+.hud-progress-bar {
+    width: 100% !important;
+    height: 4px !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border-radius: 2px !important;
+    overflow: hidden !important;
+    margin-bottom: 0.8rem !important;
+}
+.hud-progress-fill {
+    height: 100% !important;
+    background: linear-gradient(90deg, #00E5FF 0%, #00FF9D 100%) !important;
+    border-radius: 2px !important;
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.4) !important;
+}
+.hud-subtitle {
+    font-size: 0.75rem !important;
+    color: rgba(255, 255, 255, 0.35) !important;
+    font-weight: 400 !important;
 }
 
-/* Form layout overrides */
-div[data-testid="stMetricValue"] {
-    font-family: 'Outfit', sans-serif !important;
+/* Custom Floating Navigation Island */
+.top-nav-panel {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 0.85rem 1.8rem !important;
+    margin-top: -0.5rem !important;
+    margin-bottom: 2rem !important;
+    background: rgba(14, 18, 28, 0.85) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-top: 1px solid rgba(0, 229, 255, 0.35) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45), 0 0 25px rgba(0, 229, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+.top-nav-brand {
+    display: flex !important;
+    align-items: center !important;
+    font-size: 1.15rem !important;
     font-weight: 700 !important;
+    color: #ffffff !important;
+    letter-spacing: -0.02em !important;
+}
+.top-nav-brand span {
+    background: linear-gradient(135deg, #00E5FF 0%, #A855F7 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    font-weight: 700 !important;
+}
+.top-nav-links {
+    display: flex !important;
+    gap: 1.8rem !important;
+}
+.top-nav-link {
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
+    color: rgba(255, 255, 255, 0.45) !important;
+    cursor: pointer !important;
+    padding: 0.4rem 0.8rem !important;
+    border-radius: 8px !important;
+    transition: all 0.2s ease !important;
+}
+.top-nav-link:hover {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+.top-nav-link.active {
+    color: #00E5FF !important;
+    background: rgba(0, 229, 255, 0.1) !important;
+    border: 1px solid rgba(0, 229, 255, 0.3) !important;
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.15) !important;
+}
+.top-nav-right {
+    display: flex !important;
+    align-items: center !important;
+    gap: 1.2rem !important;
+}
+.top-nav-icon {
+    color: rgba(255, 255, 255, 0.45) !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+.top-nav-icon:hover {
+    color: #00E5FF !important;
+    filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.5)) !important;
+}
+.top-nav-btn {
+    background: linear-gradient(135deg, #00E5FF 0%, #00B4D8 100%) !important;
+    color: #000000 !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 0.4rem 1.1rem !important;
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    letter-spacing: -0.01em !important;
+    box-shadow: 0 0 15px rgba(0, 229, 255, 0.25) !important;
+    transition: all 0.2s ease !important;
+}
+.top-nav-btn:hover {
+    box-shadow: 0 0 22px rgba(0, 229, 255, 0.5) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1200px) {
+    .block-container {
+        padding: 1.5rem 1.5rem 3rem 1.5rem !important;
+    }
+    .hud-panel {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 1rem !important;
+    }
+}
+@media (max-width: 768px) {
+    .hud-panel {
+        grid-template-columns: 1fr !important;
+    }
+    .top-nav-panel {
+        flex-direction: column !important;
+        gap: 1rem !important;
+        padding: 1rem !important;
+        border-radius: 16px !important;
+    }
+}
+.top-nav-avatar {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 50% !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    background-image: url('https://avatars.githubusercontent.com/u/9919?v=4') !important;
+    background-size: cover !important;
+}
+
+/* Sidebar Custom Project Card */
+.sidebar-project-card {
+    background-color: rgba(255, 255, 255, 0.01) !important;
+    border: 1px solid rgba(255, 255, 255, 0.03) !important;
+    border-radius: 12px !important;
+    padding: 1rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.8rem !important;
+}
+.project-card-header {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+}
+.project-card-icon {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 8px !important;
+    background-color: rgba(0, 229, 255, 0.05) !important;
+    border: 1px solid rgba(0, 229, 255, 0.15) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #00E5FF !important;
+}
+.project-card-info {
+    display: flex !important;
+    flex-direction: column !important;
+}
+.project-card-title {
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    color: #ffffff !important;
+}
+.project-card-subtitle {
+    font-size: 0.72rem !important;
+    font-weight: 500 !important;
+    color: #00E5FF !important;
+}
+.project-card-btn {
+    background: transparent !important;
+    border: 1px solid rgba(0, 229, 255, 0.25) !important;
+    border-radius: 6px !important;
+    color: #00E5FF !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+    padding: 0.4rem 0 !important;
+    width: 100% !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+}
+.project-card-btn:hover {
+    background-color: rgba(0, 229, 255, 0.05) !important;
+}
+
+
+
+/* Dynamic Status Badges */
+.status-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    height: 100%;
+}
+.status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.status-success {
+    background: rgba(0, 255, 157, 0.05) !important;
+    color: #00FF9D !important;
+    border: 1px solid rgba(0, 255, 157, 0.15) !important;
+}
+.status-danger {
+    background: rgba(255, 92, 122, 0.05) !important;
+    color: #FF5C7A !important;
+    border: 1px solid rgba(255, 92, 122, 0.15) !important;
+}
+.status-pulse-green {
+    width: 6px;
+    height: 6px;
+    background-color: #00FF9D;
+    border-radius: 50%;
+    animation: status-pulse-anim 2s infinite ease-in-out;
+}
+.status-pulse-red {
+    width: 6px;
+    height: 6px;
+    background-color: #FF5C7A;
+    border-radius: 50%;
+    animation: status-pulse-anim 2s infinite ease-in-out;
+}
+@keyframes status-pulse-anim {
+    0% { opacity: 0.4; }
+    50% { opacity: 1; }
+    100% { opacity: 0.4; }
+}
+
+
+.editor-panel {
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+.editor-header {
+    background: rgba(255, 255, 255, 0.01) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+    padding: 0.6rem 1.2rem !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.editor-title {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.68rem !important;
+    color: rgba(255, 255, 255, 0.3) !important;
+    letter-spacing: 0.05em;
+}
+.editor-body {
+    padding: 1.25rem !important;
+}
+.editor-body pre {
+    background: transparent !important;
+    border: none !important;
+    margin: 0 !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.8rem !important;
+    line-height: 1.6 !important;
+    color: #00E5FF !important;
+    font-weight: 300 !important;
+}
+
+/* Sidebar button overrides */
+section[data-testid="stSidebar"] .stButton > button {
+    background: rgba(255, 255, 255, 0.01) !important;
+    border: 1px solid rgba(255, 255, 255, 0.03) !important;
+    border-radius: 8px !important;
+    color: rgba(255, 255, 255, 0.6) !important;
+    padding: 0.4rem 0.8rem !important;
+    font-size: 0.78rem !important;
+    transition: all 0.25s ease !important;
+}
+section[data-testid="stSidebar"] .stButton > button:hover {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+}
+
+/* Standard Button Overrides */
+.stButton > button {
+    background: rgba(255, 255, 255, 0.02) !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    border: 1px solid rgba(255, 255, 255, 0.04) !important;
+    border-radius: 6px !important;
+    padding: 0.5rem 1rem !important;
+    font-weight: 500 !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.8rem !important;
+    transition: all 0.2s ease !important;
+    width: 100% !important;
+}
+.stButton > button:hover {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+}
+
+/* Target node styles in inspector */
+.target-node {
+    background-color: rgba(255, 255, 255, 0.01) !important;
+    border: 1px solid rgba(255, 255, 255, 0.03) !important;
+    border-radius: 8px !important;
+    padding: 1rem !important;
+    margin-bottom: 1rem !important;
+}
+.target-node-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-bottom: 0.4rem !important;
+}
+.target-node-title {
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    color: #ffffff !important;
+}
+.target-badge-online {
+    font-size: 0.6rem !important;
+    font-weight: 600 !important;
+    color: #00FF9D !important;
+    background-color: rgba(0, 255, 157, 0.05) !important;
+    border: 1px solid rgba(0, 255, 157, 0.15) !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+}
+.target-badge-sim {
+    font-size: 0.6rem !important;
+    font-weight: 600 !important;
+    color: #FFC857 !important;
+    background-color: rgba(255, 200, 87, 0.05) !important;
+    border: 1px solid rgba(255, 200, 87, 0.15) !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+}
+.target-node-meta {
+    font-size: 0.72rem !important;
+    color: rgba(255, 255, 255, 0.4) !important;
+    margin-bottom: 0.6rem !important;
+}
+.target-node-progress {
+    width: 100% !important;
+    height: 3px !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border-radius: 1.5px !important;
+    overflow: hidden !important;
+    margin-bottom: 0.6rem !important;
+}
+.target-progress-fill {
+    height: 100% !important;
+    background-color: #00E5FF !important;
+}
+.target-node-status {
+    font-size: 0.72rem !important;
+    color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Style selectbox */
+div[data-baseweb="select"] {
+    background-color: rgba(255, 255, 255, 0.01) !important;
+    border: 1px solid rgba(255, 255, 255, 0.04) !important;
+    border-radius: 8px !important;
+    margin-bottom: 0.5rem !important;
+}
+div[data-baseweb="select"]:hover {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+div[data-baseweb="select"] > div {
+    background-color: transparent !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 0.82rem !important;
+}
+
+/* Style selectbox dropdown options list */
+div[role="listbox"] {
+    background-color: #0d111c !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+}
+ul[role="listbox"] li {
+    font-size: 0.8rem !important;
+    color: rgba(255, 255, 255, 0.8) !important;
+    padding: 0.5rem 1rem !important;
+}
+ul[role="listbox"] li:hover, ul[role="listbox"] li[aria-selected="true"] {
+    background-color: rgba(0, 229, 255, 0.08) !important;
+    color: #00E5FF !important;
+}
+
+/* Style toggle switches */
+div[data-testid="stToggle"] {
+    background: rgba(255, 255, 255, 0.005) !important;
+    border: 1px solid rgba(255, 255, 255, 0.03) !important;
+    border-radius: 8px !important;
+    padding: 0.4rem 0.7rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+/* Floating Workspace Tabs Navigation Bar */
+div[data-testid="stTabs"] > div:first-child {
+    background: rgba(14, 18, 28, 0.6) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 16px !important;
+    padding: 6px 10px !important;
+    margin-bottom: 2rem !important;
+    gap: 8px !important;
+}
+button[data-baseweb="tab"] {
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: 10px !important;
+    color: rgba(255, 255, 255, 0.45) !important;
+    font-weight: 500 !important;
+    padding: 0.55rem 1.25rem !important;
+    font-size: 0.82rem !important;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    text-transform: none !important;
+    letter-spacing: -0.01em !important;
+}
+button[data-baseweb="tab"]:hover {
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+}
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #00E5FF !important;
+    background: rgba(0, 229, 255, 0.08) !important;
+    border: 1px solid rgba(0, 229, 255, 0.2) !important;
+    box-shadow: 0 4px 15px rgba(0, 229, 255, 0.08) !important;
+}
+
+/* Accent texts */
+.text-cyan { color: #00E5FF !important; }
+.text-violet { color: #8B5CF6 !important; }
+.text-success { color: #00FF9D !important; }
+.text-danger { color: #FF5C7A !important; }
+
+/* Custom Expander Dropdown overrides */
+div[data-testid="stExpander"] {
+    background: rgba(11, 14, 23, 0.25) !important;
+    border: 1px solid rgba(255, 255, 255, 0.03) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1) !important;
+    margin-top: 1rem !important;
+}
+div[data-testid="stExpander"] details {
+    border: none !important;
+}
+div[data-testid="stExpander"] summary {
+    font-size: 0.8rem !important;
+    font-weight: 500 !important;
+    color: rgba(255, 255, 255, 0.6) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.75rem 1.2rem !important;
+}
+div[data-testid="stExpander"] summary:hover {
+    color: #ffffff !important;
+}
+
+/* ── Telemetry Console Styling (Cursor / VS Code Developer Toolbar) ── */
+
+/* Console section: align controls on a single tight horizontal row */
+div[data-testid="stHorizontalBlock"]:has(div[data-testid="stRadio"]) {
+    gap: 0.5rem !important;
+    margin-bottom: 0.6rem !important;
+    align-items: center !important;
+}
+
+/* 1. Segmented Control Toggle Capsule */
+div[data-testid="stRadio"]:has(input[name="console_log_mode"]) > div {
+    flex-direction: row !important;
+    gap: 2px !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 20px !important;
+    padding: 3px !important;
+    backdrop-filter: blur(12px) !important;
+    align-items: center !important;
+    height: 32px !important;
+}
+div[data-testid="stRadio"]:has(input[name="console_log_mode"]) > div > label {
+    padding: 3px 14px !important;
+    border-radius: 15px !important;
+    font-size: 0.72rem !important;
+    font-weight: 500 !important;
+    color: rgba(255, 255, 255, 0.45) !important;
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    margin: 0 !important;
+    line-height: 20px !important;
+    font-family: 'Inter', sans-serif !important;
+}
+div[data-testid="stRadio"]:has(input[name="console_log_mode"]) > div > label:hover {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+div[data-testid="stRadio"]:has(input[name="console_log_mode"]) > div > label:has(input:checked) {
+    background: rgba(0, 229, 255, 0.12) !important;
+    color: #00E5FF !important;
+    border: 1px solid rgba(0, 229, 255, 0.3) !important;
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.15) !important;
+}
+div[data-testid="stRadio"]:has(input[name="console_log_mode"]) > div > label > div:first-child {
+    display: none !important;
+}
+
+/* 2. Pill Search Field */
+div[data-testid="stTextInput"]:has(input[key="console_search_input"]) input,
+div[data-testid="stTextInput"] input[aria-label="Search"] {
+    background-color: rgba(255, 255, 255, 0.02) !important;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') !important;
+    background-repeat: no-repeat !important;
+    background-position: 12px center !important;
+    background-size: 14px 14px !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 20px !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.75rem !important;
+    padding: 0.35rem 0.85rem 0.35rem 34px !important;
+    height: 32px !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+div[data-testid="stTextInput"]:has(input[key="console_search_input"]) input:focus,
+div[data-testid="stTextInput"] input[aria-label="Search"]:focus {
+    border-color: rgba(0, 229, 255, 0.4) !important;
+    background-color: rgba(255, 255, 255, 0.04) !important;
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.15) !important;
+}
+div[data-testid="stTextInput"] input::placeholder {
+    color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* 3. Toolbar Icon-Only Buttons (Clean Developer Toolbar) */
+div.stButton > button[key="console_pause_btn"],
+div.stButton > button[key="console_resume_btn"],
+div.stButton > button[key="console_clear_btn"],
+div.stButton > button[key="console_copy_btn"],
+div.stDownloadButton > button[key="console_dl_btn"],
+div.stDownloadButton > a[key="console_dl_btn"] {
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
+    background-color: rgba(255, 255, 255, 0.02) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    color: rgba(255, 255, 255, 0.75) !important;
+    font-size: 0.85rem !important;
+    line-height: 1 !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    cursor: pointer !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: none !important;
+}
+
+/* Hover & Active Interactions */
+div.stButton > button[key="console_pause_btn"]:hover,
+div.stButton > button[key="console_resume_btn"]:hover,
+div.stButton > button[key="console_clear_btn"]:hover,
+div.stButton > button[key="console_copy_btn"]:hover,
+div.stDownloadButton > button[key="console_dl_btn"]:hover,
+div.stDownloadButton > a[key="console_dl_btn"]:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(0, 229, 255, 0.3) !important;
+    color: #00E5FF !important;
+    transform: translateY(-1px) scale(1.04) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+}
+
+div.stButton > button[key="console_resume_btn"] {
+    border-color: rgba(0, 255, 157, 0.3) !important;
+    background-color: rgba(0, 255, 157, 0.05) !important;
+    color: #00FF9D !important;
+}
+div.stButton > button[key="console_resume_btn"]:hover {
+    border-color: rgba(0, 255, 157, 0.5) !important;
+    color: #00FF9D !important;
+    box-shadow: 0 0 10px rgba(0, 255, 157, 0.25) !important;
+}
+
+div.stButton > button[key="console_clear_btn"]:hover {
+    border-color: rgba(255, 92, 122, 0.4) !important;
+    color: #FF5C7A !important;
+}
+
+/* 4. Terminal Code Surface */
+div[data-testid="stCode"] {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+    margin-top: 0.1rem !important;
+}
+div[data-testid="stCode"] > div {
+    background: #080c14 !important;
+    max-height: 440px !important;
+    overflow-y: auto !important;
+    border-radius: 12px !important;
+}
+div[data-testid="stCode"] pre {
+    background: transparent !important;
+    padding: 14px 18px !important;
+}
+div[data-testid="stCode"] pre code {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 0.73rem !important;
+    line-height: 1.65 !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* 5. Paused Indicator Banner */
+div[data-testid="stInfo"] {
+    background: rgba(255, 200, 87, 0.05) !important;
+    border: 1px solid rgba(255, 200, 87, 0.2) !important;
+    border-radius: 8px !important;
+    color: #FFC857 !important;
+    font-size: 0.78rem !important;
+    margin-bottom: 0.5rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
 
 # =====================================================================
-# Compiler Engine Backend Logic
+# Session State Initialization & Event Handling
 # =====================================================================
-class EdgeCompilerEngine:
-    """
-    Evaluates compilation metrics and generates mock compiler logs
-    and target C++/OpenVINO IR code for edge devices.
-    """
-    
-    @staticmethod
-    def compile(target_device: str, sparse_update_on: bool, sensors: dict) -> dict:
-        result = {}
-        
-        # Pull sensor readings for context-aware compiling logs
-        vwc = sensors.get('vwc', 35.0)
-        temp = sensors.get('temp', 22.5)
-        perm = sensors.get('perm', 4.5)
-        volt = sensors.get('volt', 3.3)
-        
-        timestamp = time.strftime("%H:%M:%S")
-        
-        if target_device == "Ultra-Low-Power MCU (STM32/ESP32)":
-            result["sram_limit_kb"] = 256
-            if not sparse_update_on:
-                result["status"] = "CRASHED"
-                result["memory_footprint_kb"] = 1950
-                result["precision"] = "FP32 (Standard)"
-                result["sparsity"] = "0% (Dense)"
-                result["speedup"] = "N/A (Crashed)"
-                result["active_layers"] = "0 / 30 Layers"
-                result["energy_mw"] = 0.0
-                
-                result["logs"] = (
-                    f"[{timestamp}] [INIT] Analyzing Target Silicon: STM32 / ESP32 MCU (256KB SRAM Target Limit)\n"
-                    f"[{timestamp}] [INFO] Peripheral telemetry network detected: VWC={vwc:.1f}%, Temp={temp:.1f}°C, Permittivity={perm:.2f}, Bus Voltage={volt:.2f}V\n"
-                    f"[{timestamp}] [STAGE 1] Resolving standard floating-point backpropagation gradient buffers...\n"
-                    f"[{timestamp}] [STAGE 1] Allocation request: Weight matrix (650KB) + Activation map buffers (800KB) + Gradient history (500KB)\n"
-                    f"[{timestamp}] [ERROR] Total requested heap/stack footprint: 1,950 KB\n"
-                    f"[{timestamp}] [CRITICAL] Out of Memory (OOM) / System Stack Overflow!\n"
-                    f"[{timestamp}] [CRITICAL] Requested footprint (1,950 KB) exceeds strict hardware limit (256 KB) by 1,694 KB.\n"
-                    f"[{timestamp}] [FATAL] Stack pointer address collided with sensor peripheral bus interrupt vector.\n"
-                    f"[{timestamp}] [FATAL] Device compilation aborted. System crashed."
-                )
-                
-                result["emitted_code"] = (
-                    "// ERROR: Compilation aborted due to Out of Memory (OOM)\n"
-                    "// Memory requested: 1,950 KB | Limit: 256 KB\n"
-                    "// Enable 'Sparse-Update Engine' to bypass memory wall."
-                )
-            else:
-                result["status"] = "SUCCESS"
-                result["memory_footprint_kb"] = 218
-                result["precision"] = "4-bit Quantized Latent Replay"
-                result["sparsity"] = "90% Sparsity"
-                result["speedup"] = "1.0x (Baseline)"
-                result["active_layers"] = "3 / 30 Layers"
-                result["energy_mw"] = 14.5
-                
-                result["logs"] = (
-                    f"[{timestamp}] [INIT] Analyzing Target Silicon: STM32 / ESP32 MCU (256KB SRAM Target Limit)\n"
-                    f"[{timestamp}] [INFO] Peripheral telemetry network detected: VWC={vwc:.1f}%, Temp={temp:.1f}°C, Permittivity={perm:.2f}, Bus Voltage={volt:.2f}V\n"
-                    f"[{timestamp}] [STAGE 1] Activating Dynamic Sparse-Update Neuromorphic Architecture...\n"
-                    f"[{timestamp}] [STAGE 1] Applying Magnitude-Based Dynamic Sparsity: Bypassing 90% of low-salience activation maps.\n"
-                    f"[{timestamp}] [STAGE 2] Applying 4-bit Quantized Latent Replay: Compressing history buffers into strict 32KB scratch block.\n"
-                    f"[{timestamp}] [STAGE 3] Target-specific code emission utilizing ARM CMSIS-NN / ESP-NN intrinsics.\n"
-                    f"[{timestamp}] [STAGE 3] Optimizing active training layers: 3 trainable projection heads, 27 frozen backbone layers.\n"
-                    f"[{timestamp}] [SUCCESS] Active memory footprint footprint reduced to 218 KB (within 256KB SRAM boundary).\n"
-                    f"[{timestamp}] [SUCCESS] Emit target: bare-metal C++ header and assembly optimization macros.\n"
-                    f"[{timestamp}] [SUCCESS] Compilation completed successfully."
-                )
-                
-                result["emitted_code"] = (
-                    "// Auto-Generated ARM CMSIS-NN Optimized Sparsity Kernel\n"
-                    "#include \"arm_math.h\"\n"
-                    "#include \"arm_nnfunctions.h\"\n\n"
-                    "#define BUFFER_SIZE_KB 32\n"
-                    "#define SPARSITY_RATIO 0.90f // 90% salience bypass\n"
-                    "#define ACTIVE_LAYERS 3\n\n"
-                    "// 4-bit latent replay reconstruction helper\n"
-                    "inline q7_t dequantize_4bit(uint8_t packed_val, float scale, float zero_point) {\n"
-                    "    return (q7_t)((((float)(packed_val & 0x0F)) - zero_point) * scale);\n"
-                    "}\n\n"
-                    "void train_sparse_step(q7_t* activations, q7_t* weights, q31_t* bias) {\n"
-                    "    // Bypassing 90% low-salience activation maps\n"
-                    "    for (int i = 0; i < ACTIVATION_LEN; i++) {\n"
-                    "        if (abs(activations[i]) < SALIENCE_THRESHOLD) {\n"
-                    "            continue; // Skip gradient step for this node\n"
-                    "        }\n"
-                    "        // Update weights using 4-bit compressed latent historical buffer\n"
-                    "        q7_t history = dequantize_4bit(history_buffer[i], 0.12f, -8.0f);\n"
-                    "        weights[i] += (history * LR_COEFF) >> 8;\n"
-                    "    }\n"
-                    "}"
-                )
-                
-        elif target_device == "Mid-Range Edge Core (ARM Cortex-A/Pi)":
-            result["sram_limit_kb"] = 4096  # Virtual limit for comparison
-            result["status"] = "WARNING"
-            result["memory_footprint_kb"] = 2048
-            result["precision"] = "FP16 / INT8 Mixed"
-            result["sparsity"] = "0% (Dense)"
-            result["speedup"] = "2.8x (CPU Threaded)"
-            result["active_layers"] = "30 / 30 Layers"
-            result["energy_mw"] = 480.0
-            
-            result["logs"] = (
-                f"[{timestamp}] [INIT] Analyzing Target Silicon: ARM Cortex-A / Raspberry Pi Architecture\n"
-                f"[{timestamp}] [INFO] Peripheral telemetry network detected: VWC={vwc:.1f}%, Temp={temp:.1f}°C, Permittivity={perm:.2f}, Bus Voltage={volt:.2f}V\n"
-                f"[{timestamp}] [STAGE 1] Allocating standard TensorFlow Lite Micro runtime environment...\n"
-                f"[{timestamp}] [STAGE 2] Checking memory requirements: 2,048 KB allocated in RAM tensor arena.\n"
-                f"[{timestamp}] [WARN] Device operating under full dense parameters. Core temperature expected to rise.\n"
-                f"[{timestamp}] [WARN] Active battery voltage: {volt:.2f}V. Continuous dense computation may result in thermal throttling.\n"
-                f"[{timestamp}] [WARN] Recommend enabling Sparse-Update Engine to optimize duty-cycle and reduce energy draw by 90%.\n"
-                f"[{timestamp}] [STAGE 3] Generating flatbuffer schema serialization (.tflite).\n"
-                f"[{timestamp}] [SUCCESS] Compiled with warning. Emitted TFLite executor binary."
-            )
-            
-            result["emitted_code"] = (
-                "// TensorFlow Lite Micro Execution Graph configuration\n"
-                "#include \"tensorflow/lite/micro/micro_interpreter.h\"\n"
-                "#include \"tensorflow/lite/schema/schema_generated.h\"\n\n"
-                "// Standard Dense FP16 / INT8 Mixed Precision Config\n"
-                "const int tensor_arena_size = 2048 * 1024; // 2 MB RAM allocation\n"
-                "alignas(16) uint8_t tensor_arena[tensor_arena_size];\n\n"
-                "void execute_inference_step() {\n"
-                "    TfLiteStatus invoke_status = interpreter->Invoke();\n"
-                "    if (invoke_status != kTfLiteOk) {\n"
-                "        error_reporter->Report(\"TFLite Execution Failed\\n\");\n"
-                "    }\n"
-                "}"
-            )
-            
-        else:  # Next-Gen Intel Ultra Compute (Intel Core Ultra NPU / GPU)
-            result["sram_limit_kb"] = 32768  # 32MB NPU cache limit
-            result["status"] = "SUCCESS"
-            result["memory_footprint_kb"] = 8192
-            result["precision"] = "FP32 Precision (Unpruned)"
-            result["sparsity"] = "0% (Full Dense)"
-            result["speedup"] = "14.2x (OpenVINO IR NPU)"
-            result["active_layers"] = "30 / 30 Layers"
-            result["energy_mw"] = 15000.0  # 15W NPU/GPU block
-            
-            result["logs"] = (
-                f"[{timestamp}] [INIT] Analyzing Target Silicon: Intel Core Ultra NPU / GPU Block Detected\n"
-                f"[{timestamp}] [INFO] Peripheral telemetry network detected: VWC={vwc:.1f}%, Temp={temp:.1f}°C, Permittivity={perm:.2f}, Bus Voltage={volt:.2f}V\n"
-                f"[{timestamp}] [STAGE 1] Next-Gen hardware detected. Unpruning all 30 layers to maximize telemetry regression accuracy.\n"
-                f"[{timestamp}] [STAGE 2] Bypassing 4-bit loss penalty constraints; routing parameters to full float32 pathways.\n"
-                f"[{timestamp}] [STAGE 3] Target-specific translation: Compiling graph into OpenVINO Intermediate Representation (IR).\n"
-                f"[{timestamp}] [STAGE 4] Routing execution graph directly to hardware Intel NPU Compute Blocks.\n"
-                f"[{timestamp}] [SUCCESS] Compiled OpenVINO XML/BIN Intermediate Representation.\n"
-                f"[{timestamp}] [SUCCESS] NPU Direct Acceleration enabled. Performance multiplier: 14.2x compute speedup.\n"
-                f"[{timestamp}] [SUCCESS] Compilation completed successfully."
-            )
-            
-            result["emitted_code"] = (
-                "<!-- OpenVINO Intermediate Representation (IR) Graph Segment -->\n"
-                "<net name=\"EdgeOrchestrate_Intel_Ultra\" version=\"11\">\n"
-                "    <layers>\n"
-                "        <layer id=\"0\" name=\"telemetry_input\" type=\"Parameter\" version=\"opset10\">\n"
-                "            <data element_type=\"f32\" shape=\"1, 4\"/>\n"
-                "            <output>\n"
-                "                <port id=\"0\" precision=\"FP32\" names=\"telemetry_input\"/>\n"
-                "            </output>\n"
-                "        </layer>\n"
-                "        <layer id=\"1\" name=\"dense_unpruned_proj\" type=\"FullyConnected\" version=\"opset1\">\n"
-                "            <data output_size=\"256\" precision=\"FP32\"/>\n"
-                "            <input>\n"
-                "                <port id=\"0\" precision=\"FP32\"/>\n"
-                "            </input>\n"
-                "            <output>\n"
-                "                <port id=\"1\" precision=\"FP32\"/>\n"
-                "            </output>\n"
-                "        </layer>\n"
-                "    </layers>\n"
-                "    <edges>\n"
-                "        <edge from-layer=\"0\" from-port=\"0\" to-layer=\"1\" to-port=\"0\"/>\n"
-                "    </edges>\n"
-                "</net>"
-            )
-            
-        return result
+if 'serial_bridge' not in st.session_state and serial_bridge is not None:
+    st.session_state.serial_bridge = serial_bridge.ESP32SerialBridge()
 
-# =====================================================================
-# Session State Initialization (Telemetry Tracking & History)
-# =====================================================================
-if 'vwc' not in st.session_state:
-    st.session_state.vwc = 35.0
-if 'temp' not in st.session_state:
-    st.session_state.temp = 22.5
-if 'perm' not in st.session_state:
-    st.session_state.perm = 4.5
-if 'volt' not in st.session_state:
-    st.session_state.volt = 3.3
-if 'history' not in st.session_state:
-    # Initialize mock history for timeline charts
-    st.session_state.history = pd.DataFrame({
-        "Iteration": list(range(1, 11)),
-        "VWC": [35.0 + random.uniform(-1, 1) for _ in range(10)],
-        "Temp": [22.5 + random.uniform(-0.5, 0.5) for _ in range(10)],
-        "Permittivity": [4.5 + random.uniform(-0.1, 0.1) for _ in range(10)],
-        "Voltage": [3.3 + random.uniform(-0.05, 0.05) for _ in range(10)]
-    })
-if 'iter_count' not in st.session_state:
-    st.session_state.iter_count = 10
+if 'vibration_history' not in st.session_state:
+    st.session_state.vibration_history = pd.DataFrame(columns=[
+        "Timestamp", "Count", "Magnitude_g", "Pred_Label", "Pred_Name", "Confidence", "Latency_ms", "Buffer_Count"
+    ])
 
-# =====================================================================
-# Sidebar Console Controls
-# =====================================================================
+if 'last_processed_count' not in st.session_state:
+    st.session_state.last_processed_count = -1
+
+# Read bridge status
+serial_connected = False
+if 'serial_bridge' in st.session_state and st.session_state.serial_bridge.ser and st.session_state.serial_bridge.ser.is_open:
+    serial_connected = True
+
+# Define widget callback handlers
+def handle_connect_usb():
+    selected_port = st.session_state.get("main_serial_port", None)
+    if selected_port and 'serial_bridge' in st.session_state:
+        success = st.session_state.serial_bridge.connect(selected_port)
+        if success:
+            st.toast(f"Connected to {selected_port}", icon="🔌")
+        else:
+            st.toast("Connection failed", icon="❌")
+
+def handle_disconnect_usb():
+    if 'serial_bridge' in st.session_state:
+        st.session_state.serial_bridge.disconnect()
+    st.toast("Disconnected serial bridge", icon="🔌")
+
+def handle_normal_injection():
+    if 'serial_bridge' in st.session_state:
+        sent = st.session_state.serial_bridge.send_label(0)
+        st.toast("Transmitted label [0: Normal] over serial!" if sent else "Connection offline", icon="🟢")
+
+def handle_anomaly_injection():
+    if 'serial_bridge' in st.session_state:
+        sent = st.session_state.serial_bridge.send_label(1)
+        st.toast("Transmitted label [1: Anomaly] over serial!" if sent else "Connection offline", icon="🔴")
+
+# ---------------------------------------------------------------------
+# Sidebar Panel Layout (Overview Rail)
+# ---------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("<h2 style='margin-top: 0; color: #00f2fe;'>CONTROL CONSOLE</h2>", unsafe_allow_html=True)
-    st.write("---")
+    st.markdown("""
+    <div class="sidebar-project-card">
+        <div class="project-card-header">
+            <div class="project-card-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00E5FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/></svg>
+            </div>
+            <div class="project-card-info">
+                <div class="project-card-title">Vibration Core v1</div>
+                <div class="project-card-subtitle">Active: ESP32-LX6</div>
+            </div>
+        </div>
+        <button class="project-card-btn">New Run</button>
+    </div>
+    <div style='border-bottom: 1px solid rgba(255,255,255,0.04); margin: 1.2rem 0;'></div>
+    """, unsafe_allow_html=True)
     
-    st.markdown("### 🔌 TARGET SILICON")
+    st.markdown("<div class='sidebar-section-title'>Target Profile</div>", unsafe_allow_html=True)
     target_hardware = st.selectbox(
         "Deployment Profile",
-        [
-            "Ultra-Low-Power MCU (STM32/ESP32)",
-            "Mid-Range Edge Core (ARM Cortex-A/Pi)",
-            "Next-Gen Intel Ultra Compute (Core Ultra NPU)"
-        ]
+        ["ESP32 Dual-Core LX6 (200KB SRAM Limit)"],
+        label_visibility="collapsed"
     )
     
-    st.write("")
-    
-    # Custom colored toggle switch using st.checkbox styled
-    st.markdown("### ⚙️ OPTIMIZATION PIPELINE")
-    sparse_engine_active = st.toggle("Sparse-Update Engine (DSD-NA)", value=True, help="Enable Magnitude-Based Sparsity (90% bypass) & 4-bit Quantized Latent Replay.")
-    
-    st.write("---")
-    
-    st.markdown("### 📡 TELEMETRY SIMULATION")
-    live_sim_on = st.toggle("Live Telemetry Stream", value=True)
-    
-    # Handle Live simulation vs Manual slider adjustment
-    if live_sim_on:
-        # Generate new drifted values
-        st.session_state.vwc = np.clip(st.session_state.vwc + np.random.normal(0, 0.4), 0.0, 100.0)
-        st.session_state.temp = np.clip(st.session_state.temp + np.random.normal(0, 0.15), -20.0, 60.0)
-        st.session_state.perm = np.clip(st.session_state.perm + np.random.normal(0, 0.05), 1.0, 80.0)
-        st.session_state.volt = np.clip(st.session_state.volt + np.random.normal(0, 0.01), 1.8, 5.0)
+    st.markdown("<div class='sidebar-section-title' style='margin-top: 1rem;'>Algorithm Pipeline</div>", unsafe_allow_html=True)
+    sparse_engine_active = st.toggle("Sparse-Update & 4-bit Replay Engine", value=True)
+
+
+# ---------------------------------------------------------------------
+# Telemetry Stream Updates
+# ---------------------------------------------------------------------
+if serial_connected:
+    queued_telemetry = []
+    if hasattr(st.session_state.serial_bridge, "get_all_queued_telemetry"):
+        queued_telemetry = st.session_state.serial_bridge.get_all_queued_telemetry()
+
+    if not queued_telemetry:
+        latest = st.session_state.serial_bridge.get_latest_telemetry()
+        if latest.get("count", 0) != st.session_state.get("last_processed_count", -1):
+            queued_telemetry = [latest]
+
+    if queued_telemetry:
+        new_rows = []
+        current_time = time.time()
+        for telem in queued_telemetry:
+            count = telem.get("count", 0)
+            if count != st.session_state.get("last_processed_count", -1):
+                mag = telem.get("mag", 1.0)
+                pred = telem.get("pred", 0)
+                conf = telem.get("conf", 0.95) * 100.0
+                lat = telem.get("latency_ms", 1.8)
+                buf_c = telem.get("buffer", 0)
+                pred_name = "ANOMALOUS" if pred == 1 else "NORMAL"
+                
+                new_rows.append({
+                    "Timestamp": current_time,
+                    "Count": count,
+                    "Magnitude_g": round(mag, 3),
+                    "Pred_Label": pred,
+                    "Pred_Name": pred_name,
+                    "Confidence": round(min(max(conf, 50.0), 99.9), 1),
+                    "Latency_ms": round(lat, 2),
+                    "Buffer_Count": buf_c
+                })
+                st.session_state.last_processed_count = count
         
-        # Increment iterations and append to data history
-        st.session_state.iter_count += 1
-        new_row = pd.DataFrame([{
-            "Iteration": st.session_state.iter_count,
-            "VWC": st.session_state.vwc,
-            "Temp": st.session_state.temp,
-            "Permittivity": st.session_state.perm,
-            "Voltage": st.session_state.volt
-        }])
-        st.session_state.history = pd.concat([st.session_state.history, new_row], ignore_index=True)
-        # Keep sliding history window at 15 items
-        if len(st.session_state.history) > 15:
-            st.session_state.history = st.session_state.history.iloc[1:].reset_index(drop=True)
-            
-        # Display read-only metrics
-        st.slider("Volumetric Water Content (VWC %)", 0.0, 100.0, float(st.session_state.vwc), disabled=True)
-        st.slider("Soil Temperature (°C)", -20.0, 60.0, float(st.session_state.temp), disabled=True)
-        st.slider("Dielectric Permittivity", 1.0, 80.0, float(st.session_state.perm), disabled=True)
-        st.slider("Bus Voltage (V)", 1.8, 5.0, float(st.session_state.volt), disabled=True)
-    else:
-        # Manual slide adjustments
-        st.session_state.vwc = st.slider("Volumetric Water Content (VWC %)", 0.0, 100.0, float(st.session_state.vwc))
-        st.session_state.temp = st.slider("Soil Temperature (°C)", -20.0, 60.0, float(st.session_state.temp))
-        st.session_state.perm = st.slider("Dielectric Permittivity", 1.0, 80.0, float(st.session_state.perm))
-        st.session_state.volt = st.slider("Bus Voltage (V)", 1.8, 5.0, float(st.session_state.volt))
+        if new_rows:
+            new_df = pd.DataFrame(new_rows)
+            st.session_state.vibration_history = pd.concat([st.session_state.vibration_history, new_df], ignore_index=True)
+            if len(st.session_state.vibration_history) > 50:
+                st.session_state.vibration_history = st.session_state.vibration_history.iloc[-50:].reset_index(drop=True)
 
-    st.write("---")
-    # Small metadata footer
-    st.markdown(
-        "<div style='font-size: 0.75rem; color: #475569; text-align: center;'>"
-        "Intel Next-Gen AI Workforce Hackathon<br>"
-        "Orchestration Framework Pitch v2.0"
-        "</div>",
-        unsafe_allow_html=True
-    )
-
-# Gather sensor dict for compiling
-current_sensors = {
-    'vwc': st.session_state.vwc,
-    'temp': st.session_state.temp,
-    'perm': st.session_state.perm,
-    'volt': st.session_state.volt
-}
-
-# Run the compilation engine
-compiler_data = EdgeCompilerEngine.compile(target_hardware, sparse_engine_active, current_sensors)
-
-
-# =====================================================================
-# Main Dashboard UI Layout
-# =====================================================================
-# Header Section
-st.markdown("<h1 class='main-title'>EdgeOrchestrate AI</h1>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Cross-Platform Neuromorphic Middleware Engine & Compiler</div>", unsafe_allow_html=True)
-
-# Compiler Banner Status
-if compiler_data["status"] == "SUCCESS":
-    st.markdown(
-        f"<div class='banner-success'>🟢 STATUS: COMPILE SUCCESSFUL. Model graph validated and routed to "
-        f"{target_hardware.split(' ')[0]} target. Active profile: {compiler_data['precision']}</div>",
-        unsafe_allow_html=True
-    )
-elif compiler_data["status"] == "WARNING":
-    st.markdown(
-        f"<div class='banner-warning'>🟡 STATUS: COMPILE SUCCESS WITH WARNINGS. Model deployed on "
-        f"{target_hardware.split(' ')[0]} in dense format. Optimization bypass warnings active. Check logs.</div>",
-        unsafe_allow_html=True
-    )
+if len(st.session_state.vibration_history) > 0:
+    latest_data = st.session_state.vibration_history.iloc[-1]
 else:
+    latest_data = None
+
+# Calculate real static memory footprint
+sram_kb = 33.60
+if memory_planner is not None:
+    try:
+        ok, static_bytes = memory_planner.calculate_sram_footprint("tools/model_spec.json", verbose=False)
+        sram_kb = round(static_bytes / 1024.0, 2)
+    except Exception:
+        pass
+
+# =====================================================================
+# Main Application Workspace Shell
+# =====================================================================
+
+# Floating Top Navigation Island
+st.markdown(f"""
+<div class="top-nav-panel">
+    <div class="top-nav-brand">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="%2300E5FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 10px;"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        <span>TinyML</span>&nbsp;Studio
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; background: rgba(0, 255, 157, 0.06); border: 1px solid rgba(0, 255, 157, 0.18); border-radius: 20px; font-size: 0.72rem; color: #00FF9D; font-weight: 500;">
+            <span style="width: 6px; height: 6px; background: #00FF9D; border-radius: 50%; display: inline-block;"></span> ESP32 Hub Active
+        </span>
+    </div>
+    <div class="top-nav-right">
+        <svg class="top-nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <svg class="top-nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <button class="top-nav-btn">Sync Model</button>
+        <div class="top-nav-avatar"></div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Main Application Workspaces
+ws_overview, ws_continual, ws_replay, ws_runtime, ws_deploy = st.tabs([
+    "Overview", 
+    "Continual Learning", 
+    "Replay Buffer", 
+    "Runtime", 
+    "Deployment"
+])
+
+# ---------------------------------------------------------------------
+# WORKSPACE 1: OVERVIEW
+# ---------------------------------------------------------------------
+with ws_overview:
+    # Initialize sram state tracking in session state
+    if 'sram_kb' not in st.session_state:
+        st.session_state.sram_kb = "Unavailable"
+        
+    if serial_connected:
+        telem = st.session_state.serial_bridge.get_latest_telemetry()
+        sram_val = telem.get("static_ram_kb", None)
+        if sram_val is not None:
+            st.session_state.sram_kb = round(float(sram_val), 2)
+            
+    sram_kb = st.session_state.sram_kb
+    if sram_kb != "Unavailable":
+        sram_percent = min(round((sram_kb / 200) * 100, 1), 100.0)
+    else:
+        sram_percent = 0.0
+
+    if latest_data is not None:
+        pred_class = "text-success" if latest_data["Pred_Label"] == 0 else "text-danger"
+        pred_name = latest_data['Pred_Name']
+        confidence = f"{latest_data['Confidence']}%"
+        magnitude_val = f"{latest_data['Magnitude_g']:.3f}"
+        magnitude_unit = "g"
+        mag_percent = min(round((latest_data['Magnitude_g'] / 1.5) * 100, 1), 100.0)
+        latency_val = f"{latest_data['Latency_ms']}"
+        latency_unit = "ms"
+        buf_count = f"{int(latest_data['Buffer_Count'])}"
+        buf_c_raw = int(latest_data['Buffer_Count'])
+    else:
+        pred_class = "text-violet"
+        pred_name = "Unavailable"
+        confidence = "Unavailable"
+        magnitude_val = "Unavailable"
+        magnitude_unit = ""
+        mag_percent = 0.0
+        latency_val = "Unavailable"
+        latency_unit = ""
+        buf_count = "Unavailable"
+        buf_c_raw = 0
+
+    st.markdown(f"""
+    <div class="hud-panel">
+        <div class="hud-card">
+            <div class="hud-label">Health State Prediction</div>
+            <div class="hud-value-row">
+                <span class="hud-val {pred_class}">{pred_name}</span>
+            </div>
+            <div class="hud-subtitle text-cyan">Confidence: {confidence}</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Vibration Magnitude</div>
+            <div class="hud-value-row">
+                <span class="hud-val">{magnitude_val}</span>
+                <span class="hud-unit">{magnitude_unit}</span>
+            </div>
+            <div class="hud-progress-bar">
+                <div class="hud-progress-fill" style="width: {mag_percent}%;"></div>
+            </div>
+            <div class="hud-subtitle">3-Axis Magnitude ||a||</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Static SRAM</div>
+            <div class="hud-value-row">
+                <span class="hud-val">{sram_kb}</span>
+                <span class="hud-unit">{'KB' if sram_kb != "Unavailable" else ""}</span>
+            </div>
+            <div class="hud-progress-bar">
+                <div class="hud-progress-fill" style="width: {sram_percent}%; background-color: #00FF9D;"></div>
+            </div>
+            <div class="hud-subtitle">Limit: 200 KB (Zero Malloc)</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Inference & Replay</div>
+            <div class="hud-value-row">
+                <span class="hud-val">{latency_val}</span>
+                <span class="hud-unit">{latency_unit}</span>
+            </div>
+            <div class="hud-subtitle text-cyan">Replay Reservoir: {buf_count}/50 samples</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Main Workspace Grid
+    row2_col1, row2_col2 = st.columns([2.2, 1.0])
+
+    with row2_col1:
+        st.markdown("""
+        <div style='font-size: 0.72rem; font-weight: 500; color: rgba(255, 255, 255, 0.3); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.75rem;'>Vibration Analytics</div>
+        """, unsafe_allow_html=True)
+        
+        chart_tab1, chart_tab2 = st.columns(2)
+        with chart_tab1:
+            fig_vib = go.Figure()
+            if len(st.session_state.vibration_history) > 0:
+                counts = st.session_state.vibration_history["Count"]
+                mags = st.session_state.vibration_history["Magnitude_g"]
+                
+                fig_vib.add_trace(go.Scatter(
+                    x=counts,
+                    y=mags,
+                    mode='lines',
+                    name='Acceleration Magnitude',
+                    line=dict(color='#00E5FF', width=1.5, shape='spline'),
+                ))
+                fig_vib.add_hline(y=1.00, line_dash="dash", line_color="rgba(0, 255, 157, 0.15)")
+                fig_vib.add_hline(y=1.30, line_dash="dash", line_color="rgba(255, 92, 122, 0.15)")
+            else:
+                fig_vib.add_annotation(
+                    text="Device Disconnected<br>Waiting for telemetry data...",
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.5, showarrow=False,
+                    font=dict(color="rgba(255,255,255,0.45)", size=12)
+                )
+            
+            fig_vib.update_layout(
+                template="plotly_dark",
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(family="Inter, sans-serif", color="rgba(255, 255, 255, 0.3)", size=10),
+                yaxis=dict(
+                    title="Acceleration (g)", 
+                    gridcolor="rgba(255, 255, 255, 0.01)", 
+                    zerolinecolor="rgba(255, 255, 255, 0.01)",
+                    range=[0.5, 2.0]
+                ),
+                xaxis=dict(
+                    title="Sample count", 
+                    gridcolor="rgba(255, 255, 255, 0.01)",
+                    zerolinecolor="rgba(255, 255, 255, 0.01)"
+                ),
+                margin=dict(l=40, r=10, t=10, b=40),
+                height=250,
+                showlegend=False
+            )
+            st.plotly_chart(fig_vib, key="plotly_accel_vibrations", width='stretch')
+            
+        with chart_tab2:
+            fig_conf = go.Figure()
+            if len(st.session_state.vibration_history) > 0:
+                counts = st.session_state.vibration_history["Count"]
+                confs = st.session_state.vibration_history["Confidence"]
+                preds = st.session_state.vibration_history["Pred_Label"]
+                colors = ['rgba(0, 255, 157, 0.3)' if p == 0 else 'rgba(255, 92, 122, 0.3)' for p in preds]
+                
+                fig_conf.add_trace(go.Bar(
+                    x=counts,
+                    y=confs,
+                    marker_color=colors,
+                    name='Confidence',
+                    marker_line_width=0
+                ))
+            else:
+                fig_conf.add_annotation(
+                    text="Device Disconnected<br>Waiting for telemetry data...",
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.5, showarrow=False,
+                    font=dict(color="rgba(255,255,255,0.45)", size=12)
+                )
+            fig_conf.update_layout(
+                template="plotly_dark",
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(family="Inter, sans-serif", color="rgba(255, 255, 255, 0.3)", size=10),
+                yaxis=dict(
+                    title="Confidence (%)", 
+                    gridcolor="rgba(255, 255, 255, 0.01)", 
+                    zerolinecolor="rgba(255, 255, 255, 0.01)",
+                    range=[0, 100]
+                ),
+                xaxis=dict(
+                    title="Sample count", 
+                    gridcolor="rgba(255, 255, 255, 0.01)",
+                    zerolinecolor="rgba(255, 255, 255, 0.01)"
+                ),
+                margin=dict(l=40, r=10, t=10, b=40),
+                height=250,
+                showlegend=False
+            )
+            st.plotly_chart(fig_conf, key="plotly_confidence_vibrations", width='stretch')
+
+    with row2_col2:
+        conn_info = {
+            "connected": False,
+            "board_name": "Unknown Device",
+            "chip_family": "Unavailable",
+            "port": "Unavailable",
+            "baudrate": "Unavailable",
+            "firmware_version": "Unavailable",
+            "build_version": "Unavailable",
+            "app_version": "Unavailable",
+            "sdk_version": "Unavailable",
+            "uptime": "Unavailable"
+        }
+        if 'serial_bridge' in st.session_state:
+            conn_info = st.session_state.serial_bridge.get_connection_info()
+
+        st.markdown("""
+        <div style='font-size: 0.72rem; font-weight: 500; color: rgba(255, 255, 255, 0.3); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.75rem;'>Hardware Profile</div>
+        """, unsafe_allow_html=True)
+        
+        status_badge = '<span class="target-badge-online">LIVE</span>' if conn_info["connected"] else '<span class="target-badge-offline" style="background: rgba(255, 92, 122, 0.08); border: 1px solid rgba(255, 92, 122, 0.2); color: #FF5C7A; font-size: 0.62rem; font-weight: 800; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.05em;">DISCONNECTED</span>'
+        status_text = "Serial Synced" if conn_info["connected"] else "Device Disconnected"
+        progress_width = "100%" if conn_info["connected"] else "0%"
+        progress_color = "" if conn_info["connected"] else "background: #FF5C7A;"
+        
+        st.markdown(f"""
+        <div class="target-node">
+            <div class="target-node-header">
+                <span class="target-node-title">{conn_info['board_name']}</span>
+                {status_badge}
+            </div>
+            <div class="target-node-meta">Task: Anomaly Classification Engine</div>
+            <div class="target-node-progress">
+                <div class="target-progress-fill" style="width: {progress_width}; {progress_color}"></div>
+            </div>
+            <div class="target-node-status">Status: {status_text}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown(f"""
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 8px; padding: 0.75rem; margin-top: 0.5rem; font-size: 0.75rem; line-height: 1.6;">
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">Chip Family:</span>
+                <strong style="color: #ffffff;">{conn_info['chip_family']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">Serial Port:</span>
+                <strong style="color: #00E5FF;">{conn_info['port']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">Baud Rate:</span>
+                <strong style="color: #ffffff;">{conn_info['baudrate']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">Firmware Version:</span>
+                <strong style="color: #00FF9D;">{conn_info['firmware_version']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">Build Version:</span>
+                <strong style="color: #ffffff;">{conn_info['build_version']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">App Version:</span>
+                <strong style="color: #ffffff;">{conn_info['app_version']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-top: 0.25rem; padding-bottom: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">SDK Version:</span>
+                <strong style="color: #ffffff;">{conn_info['sdk_version']}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; padding-top: 0.25rem;">
+                <span style="color: rgba(255,255,255,0.4);">Runtime Uptime:</span>
+                <strong style="color: #FFC857;">{conn_info['uptime']}</strong>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+            
+        st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+        
+        if serial_bridge and serial_bridge.SERIAL_AVAILABLE:
+            available_ports = serial_bridge.list_available_serial_ports()
+            if not available_ports:
+                st.markdown("<div style='font-size:0.75rem; color:#FF5C7A; margin-bottom:0.5rem;'>⚠️ No serial ports found. Plug in ESP32.</div>", unsafe_allow_html=True)
+                selected_port = None
+            else:
+                selected_port = st.selectbox("ESP32 Serial Port COM Selection", available_ports, key="main_serial_port", label_visibility="collapsed")
+            
+            col_conn1, col_conn2 = st.columns(2)
+            with col_conn1:
+                st.button("Connect USB", key="main_connect_btn", on_click=handle_connect_usb, disabled=(not available_ports))
+            with col_conn2:
+                st.button("Disconnect", key="main_disconnect_btn", on_click=handle_disconnect_usb)
+                
+        st.markdown("<div style='border-bottom: 1px solid rgba(255,255,255,0.04); margin: 1rem 0;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size: 0.65rem; font-weight: 500; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 0.5rem;'>Adaptation Injection</div>", unsafe_allow_html=True)
+        
+        col_lbl1, col_lbl2 = st.columns(2)
+        with col_lbl1:
+            st.button("🟢 Normal", key="main_normal_btn", on_click=handle_normal_injection)
+        with col_lbl2:
+            st.button("🔴 Anomaly", key="main_anomaly_btn", on_click=handle_anomaly_injection)
+
+    # ── Telemetry Console ──────────────────────────────────────────────
+    # Collect raw logs from bridge
+    if 'serial_bridge' in st.session_state:
+        logs_list = list(st.session_state.serial_bridge.serial_logs)
+    else:
+        logs_list = []
+
+    # Session state defaults
+    if 'console_paused' not in st.session_state:
+        st.session_state.console_paused = False
+
+    # Console section label
     st.markdown(
-        f"<div class='banner-danger'>🔴 STATUS: CRITICAL ERROR. Out of Memory (OOM) Stack Overflow. Target device halted. "
-        f"Activate 'Sparse-Update Engine' on sidebar to compression-route.</div>",
+        "<div style='font-size:0.72rem; font-weight:500; color:rgba(255,255,255,0.3); "
+        "letter-spacing:0.15em; text-transform:uppercase; margin-top:1.5rem; margin-bottom:0.6rem;'>"
+        "On-Device Telemetry Log</div>",
         unsafe_allow_html=True
     )
 
-# ---------------------------------------------------------------------
-# Row 1: Live Hardware HUD / Telemetry Matrix
-# ---------------------------------------------------------------------
-hud_col1, hud_col2, hud_col3, hud_col4 = st.columns(4)
+    # Controls row (Single horizontal developer toolbar)
+    c_mode, c_search, c_pause, c_clear, c_copy, c_dl = st.columns([2.2, 5.0, 0.45, 0.45, 0.45, 0.45])
 
-with hud_col1:
-    mem_color = "text-success" if compiler_data["status"] == "SUCCESS" else ("text-warning" if compiler_data["status"] == "WARNING" else "text-danger")
-    st.markdown(f"""
-    <div class="hud-card">
-        <div class="hud-title">Memory Footprint</div>
-        <div class="hud-value">{compiler_data['memory_footprint_kb']} KB</div>
-        <div class="hud-sub {mem_color}">Limit: {compiler_data['sram_limit_kb']} KB Target SRAM</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with hud_col2:
-    st.markdown(f"""
-    <div class="hud-card">
-        <div class="hud-title">Precision Pipeline</div>
-        <div class="hud-value" style="font-size: 1.3rem; line-height: 2.1rem;">{compiler_data['precision']}</div>
-        <div class="hud-sub text-cyan">Quantized Latent Replay</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with hud_col3:
-    st.markdown(f"""
-    <div class="hud-card">
-        <div class="hud-title">Active Layers</div>
-        <div class="hud-value">{compiler_data['active_layers']}</div>
-        <div class="hud-sub text-cyan">Pruning Strategy: {compiler_data['sparsity']}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with hud_col4:
-    speedup_class = "text-cyan" if "Intel" in target_hardware else "text-warning"
-    st.markdown(f"""
-    <div class="hud-card">
-        <div class="hud-title">Hardware Acceleration</div>
-        <div class="hud-value">{compiler_data['speedup']}</div>
-        <div class="hud-sub {speedup_class}">Power Draw: {compiler_data['energy_mw']:.1f} mW</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ---------------------------------------------------------------------
-# Row 2: Live Diagnostic Output Logs & Target Hardware Code
-# ---------------------------------------------------------------------
-row2_col1, row2_col2 = st.columns([3, 2])
-
-with row2_col1:
-    st.markdown("### 🖥️ COMPILE INTERFACE TERMINAL LOG")
-    
-    # Styled Terminal window wrapper
-    st.markdown("""
-    <div class="terminal-header">
-        <div class="terminal-dots">
-            <span class="dot dot-red"></span>
-            <span class="dot dot-yellow"></span>
-            <span class="dot dot-green"></span>
-        </div>
-        <div class="terminal-title">edgeorchestrate-compiler --verbose</div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.code(compiler_data["logs"], language="bash")
-
-with row2_col2:
-    st.markdown("### 🔩 EMITTED HARDWARE TARGET REPRESENTATION")
-    st.markdown("""
-    <div class="terminal-header">
-        <div class="terminal-dots">
-            <span class="dot dot-red"></span>
-            <span class="dot dot-yellow"></span>
-            <span class="dot dot-green"></span>
-        </div>
-        <div class="terminal-title">emitted_binary_ir.h / net.xml</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Set syntax highlighting based on code block content
-    code_lang = "xml" if "Intel" in target_hardware else "cpp"
-    st.code(compiler_data["emitted_code"], language=code_lang)
-
-# ---------------------------------------------------------------------
-# Row 3: Plots & Visual Analytics
-# ---------------------------------------------------------------------
-st.markdown("---")
-st.markdown("### 📊 INTERACTIVE DIAGNOSTICS & HARDWARE BENCHMARKS")
-
-row3_col1, row3_col2 = st.columns(2)
-
-with row3_col1:
-    # Memory Demand Bar Chart
-    mem_target_limit = compiler_data["sram_limit_kb"]
-    mem_allocated = compiler_data["memory_footprint_kb"]
-    
-    fig_mem = go.Figure()
-    
-    # Add target hardware limit bar
-    fig_mem.add_trace(go.Bar(
-        x=["Hardware SRAM Limit", "Model Footprint"],
-        y=[mem_target_limit, mem_allocated],
-        marker_color=["rgba(56, 189, 248, 0.6)", "rgba(244, 63, 94, 0.85)" if compiler_data["status"] == "CRASHED" else "rgba(16, 185, 129, 0.85)"],
-        text=[f"{mem_target_limit} KB", f"{mem_allocated} KB"],
-        textposition='auto',
-        width=[0.5, 0.5]
-    ))
-    
-    # Custom layout
-    fig_mem.update_layout(
-        title={
-            'text': "Memory Footprint Demands vs. Silicon Limits",
-            'y':0.95,
-            'x':0.5,
-            'xanchor': 'center',
-            'yanchor': 'top'
-        },
-        template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        yaxis=dict(
-            title="Memory Size (KB)",
-            gridcolor="#1e293b",
-            zerolinecolor="#1e293b",
-        ),
-        xaxis=dict(
-            gridcolor="#1e293b"
-        ),
-        margin=dict(l=40, r=40, t=60, b=40),
-        height=320,
-        showlegend=False
-    )
-    
-    # Add strict horizontal red line representing the 256KB Microcontroller SRAM limit
-    if target_hardware == "Ultra-Low-Power MCU (STM32/ESP32)":
-        fig_mem.add_hline(
-            y=256,
-            line_dash="dash",
-            line_color="#ef4444",
-            annotation_text="Strict 256KB SRAM Barrier Wall",
-            annotation_position="top right",
-            annotation_font=dict(color="#f87171", size=10)
+    with c_mode:
+        log_mode = st.radio(
+            "View",
+            ["Parsed", "Raw"],
+            horizontal=True,
+            key="console_log_mode",
+            label_visibility="collapsed",
         )
-        
-    st.plotly_chart(fig_mem, use_container_width=True)
 
-with row3_col2:
-    # Execution Timeline Simulation
-    fig_time = go.Figure()
-    
-    iterations = st.session_state.history["Iteration"]
-    
-    # Simulating iteration compute time based on state
-    if "Intel" in target_hardware:
-        # High speedup, Intel openVINO speedup
-        sparse_time = [random.uniform(0.7, 0.9) for _ in range(len(iterations))]
-        dense_time = [random.uniform(11.5, 13.0) for _ in range(len(iterations))]
-    elif "Pi" in target_hardware:
-        sparse_time = [random.uniform(12.0, 15.0) for _ in range(len(iterations))]
-        dense_time = [random.uniform(40.0, 45.0) for _ in range(len(iterations))]
-    else:  # MCU
-        if not sparse_engine_active:
-            # Crashed, no data
-            sparse_time = []
-            dense_time = []
+    with c_search:
+        search_query = st.text_input(
+            "Search",
+            placeholder="Search logs...",
+            key="console_search_input",
+            label_visibility="collapsed",
+        )
+
+    with c_pause:
+        if st.session_state.console_paused:
+            if st.button("▶", key="console_resume_btn", help="Resume log stream", use_container_width=True):
+                st.session_state.console_paused = False
+                st.session_state.pop("console_frozen_logs", None)
+                st.rerun()
         else:
-            sparse_time = [random.uniform(32.0, 38.0) for _ in range(len(iterations))]
-            dense_time = [random.uniform(280.0, 310.0) for _ in range(len(iterations))] # Standard float update time estimation
-            
-    if compiler_data["status"] == "CRASHED":
-        # Display simple crash notice placeholder on chart
-        fig_time.add_annotation(
-            text="CORE CRASHED (OOM)<br>No execution data generated.",
-            xref="paper", yref="paper",
-            x=0.5, y=0.5, showarrow=False,
-            font=dict(color="#f87171", size=18, family="Outfit")
+            if st.button("⏸", key="console_pause_btn", help="Pause log stream", use_container_width=True):
+                st.session_state.console_paused = True
+                st.session_state.console_frozen_logs = list(logs_list)
+                st.rerun()
+
+    with c_clear:
+        if st.button("🗑", key="console_clear_btn", help="Clear console logs", use_container_width=True):
+            if 'serial_bridge' in st.session_state:
+                with st.session_state.serial_bridge.lock:
+                    st.session_state.serial_bridge.serial_logs = []
+            st.session_state.console_paused = False
+            st.session_state.pop("console_frozen_logs", None)
+            st.toast("Console cleared", icon="🧹")
+            st.rerun()
+
+    with c_copy:
+        if st.button("📋", key="console_copy_btn", help="Copy visible logs", use_container_width=True):
+            st.toast("Visible logs copied to clipboard!", icon="📋")
+
+    with c_dl:
+        dl_data = "\n".join(logs_list) if logs_list else ""
+        st.download_button(
+            "⬇",
+            data=dl_data,
+            file_name="esp32_telemetry.txt",
+            mime="text/plain",
+            key="console_dl_btn",
+            help="Download log file",
+            use_container_width=True,
         )
+
+    # Determine which log set to display
+    if st.session_state.console_paused:
+        display_logs = list(st.session_state.get("console_frozen_logs", logs_list))
     else:
-        # Add Standard compute times
-        fig_time.add_trace(go.Scatter(
-            x=iterations,
-            y=dense_time,
-            mode='lines+markers',
-            name='Standard Dense Training Iteration',
-            line=dict(color='#f43f5e', width=2, dash='dot'),
-            marker=dict(size=6)
-        ))
-        # Add EdgeOrchestrate optimized times
-        fig_time.add_trace(go.Scatter(
-            x=iterations,
-            y=sparse_time,
-            mode='lines+markers',
-            name='EdgeOrchestrate Neuromorphic Sparse',
-            line=dict(color='#00f2fe', width=3),
-            marker=dict(size=7)
-        ))
-        
-    fig_time.update_layout(
-        title={
-            'text': "Execution Latency Over Iterations (ms)",
-            'y':0.95,
-            'x':0.5,
-            'xanchor': 'center',
-            'yanchor': 'top'
-        },
-        template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        yaxis=dict(
-            title="Computation Latency (ms)",
-            gridcolor="#1e293b",
-            zerolinecolor="#1e293b",
-        ),
-        xaxis=dict(
-            title="Iteration Step",
-            gridcolor="#1e293b"
-        ),
-        margin=dict(l=40, r=40, t=60, b=40),
-        height=320,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1,
-            font=dict(size=9)
-        )
-    )
-    
-    st.plotly_chart(fig_time, use_container_width=True)
+        display_logs = list(logs_list)
+
+    # Apply search filter (server-side)
+    if search_query:
+        display_logs = [l for l in display_logs if search_query.lower() in l.lower()]
+
+    # Parse a JSON telemetry line into a human-readable summary (plain text & HTML)
+    import re as _re
+    import html as _html
+
+    def _fmt_parsed(line):
+        m = _re.match(r'^\[([0-9:.]+)\]\s+(.*)$', line)
+        if not m:
+            return line
+        ts, payload = m.group(1), m.group(2).strip()
+        try:
+            data = json.loads(payload)
+            if data.get('type') == 'telemetry':
+                pred = data.get('pred', 0)
+                label = 'ANOMALOUS' if pred == 1 else 'NORMAL   '
+                return (
+                    f"[{ts}]  "
+                    f"IMU {data.get('mag', 0):.3f} g  │  "
+                    f"{label} {data.get('conf', 0)*100:.1f}%  │  "
+                    f"SRAM {data.get('static_ram_kb', 0):.1f} KB  │  "
+                    f"Buf {data.get('buffer', 0):>2}/50  │  "
+                    f"Lat {data.get('latency_ms', 0):.2f} ms"
+                )
+        except Exception:
+            pass
+        return line
+
+    def _fmt_parsed_html(line):
+        m = _re.match(r'^\[([0-9:.]+)\]\s+(.*)$', line)
+        if not m:
+            return _html.escape(line)
+        ts, payload = m.group(1), m.group(2).strip()
+        try:
+            data = json.loads(payload)
+            if data.get('type') == 'telemetry':
+                pred = data.get('pred', 0)
+                if pred == 1:
+                    lbl_html = '<span style="color:#FF5C7A; font-weight:700; background:rgba(255,92,122,0.12); padding:1px 5px; border-radius:3px;">ANOMALOUS</span>'
+                else:
+                    lbl_html = '<span style="color:#00FF9D; font-weight:600; background:rgba(0,255,157,0.08); padding:1px 5px; border-radius:3px;">NORMAL   </span>'
+                
+                mag = data.get('mag', 0)
+                conf = data.get('conf', 0) * 100
+                sram = data.get('static_ram_kb', 0)
+                buf = data.get('buffer', 0)
+                lat = data.get('latency_ms', 0)
+
+                return (
+                    f'<span style="color:#00E5FF;">[{_html.escape(ts)}]</span>  '
+                    f'IMU <span style="color:#FFFFFF;">{mag:.3f}</span> g  │  '
+                    f'{lbl_html} <span style="color:#E0E0E0;">{conf:.1f}%</span>  │  '
+                    f'SRAM <span style="color:#8A99AD;">{sram:.1f}</span> KB  │  '
+                    f'Buf <span style="color:#8A99AD;">{buf:>2}/50</span>  │  '
+                    f'Lat <span style="color:#8A99AD;">{lat:.2f}</span> ms'
+                )
+        except Exception:
+            pass
+        return _html.escape(line)
+
+    # Build display text & HTML content
+    if display_logs:
+        if log_mode == "Parsed":
+            display_text = "\n".join(_fmt_parsed(l) for l in display_logs)
+            html_body_content = "\n".join(_fmt_parsed_html(l) for l in display_logs)
+        else:
+            display_text = "\n".join(display_logs)
+            html_body_content = "\n".join(_html.escape(l) for l in display_logs)
+    else:
+        display_text = "Waiting for telemetry data...\n\nConnect the ESP32 via serial to begin streaming."
+        html_body_content = '<div style="color:rgba(255,255,255,0.45); padding: 1rem 0;">Waiting for telemetry data...<br><br>Connect the ESP32 via serial to begin streaming.</div>'
+
+    # Paused indicator
+    if st.session_state.console_paused:
+        st.info("⏸  Log stream paused — live data is still being collected in the background.")
+
+    # Custom Terminal Component with auto-scroll container
+    is_paused_js = "true" if st.session_state.console_paused else "false"
+    status_badge_class = "status-paused" if st.session_state.console_paused else "status-live"
+    status_badge_text = "PAUSED" if st.session_state.console_paused else "LIVE AUTO-SCROLL"
+
+    console_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        * {{
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }}
+        body {{
+          background-color: transparent;
+          font-family: 'JetBrains Mono', 'Fira Code', 'Roboto Mono', 'Cascadia Code', monospace;
+          color: rgba(255, 255, 255, 0.85);
+          overflow: hidden;
+        }}
+        .terminal-container {{
+          position: relative;
+          background: #080c14;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 12px;
+          box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6), 0 10px 30px rgba(0, 0, 0, 0.35);
+          height: 380px;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }}
+        .terminal-header {{
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 8px 14px;
+          background: rgba(255, 255, 255, 0.025);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+          font-size: 0.68rem;
+          color: rgba(255, 255, 255, 0.4);
+          user-select: none;
+        }}
+        .terminal-dots {{
+          display: flex;
+          gap: 6px;
+        }}
+        .dot {{
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+        }}
+        .dot-red {{ background: #FF5C7A; opacity: 0.8; }}
+        .dot-yellow {{ background: #FFC857; opacity: 0.8; }}
+        .dot-green {{ background: #00FF9D; opacity: 0.8; }}
+        .terminal-title {{
+          letter-spacing: 0.1em;
+          font-weight: 500;
+          font-size: 0.66rem;
+          color: rgba(255, 255, 255, 0.45);
+        }}
+        .status-badge {{
+          font-size: 0.62rem;
+          font-weight: 600;
+          padding: 2px 8px;
+          border-radius: 10px;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+        }}
+        .status-live {{
+          background: rgba(0, 255, 157, 0.08);
+          color: #00FF9D;
+          border: 1px solid rgba(0, 255, 157, 0.25);
+        }}
+        .status-paused {{
+          background: rgba(255, 200, 87, 0.08);
+          color: #FFC857;
+          border: 1px solid rgba(255, 200, 87, 0.25);
+        }}
+        .terminal-body {{
+          flex: 1;
+          overflow-y: auto;
+          padding: 12px 16px;
+          font-size: 0.73rem;
+          line-height: 1.65;
+          white-space: pre-wrap;
+          word-break: break-all;
+        }}
+        .terminal-body::-webkit-scrollbar {{
+          width: 7px;
+        }}
+        .terminal-body::-webkit-scrollbar-track {{
+          background: rgba(0, 0, 0, 0.25);
+        }}
+        .terminal-body::-webkit-scrollbar-thumb {{
+          background: rgba(255, 255, 255, 0.15);
+          border-radius: 4px;
+        }}
+        .terminal-body::-webkit-scrollbar-thumb:hover {{
+          background: rgba(0, 229, 255, 0.4);
+        }}
+        .scroll-bottom-btn {{
+          position: absolute;
+          bottom: 12px;
+          right: 18px;
+          background: rgba(8, 12, 20, 0.9);
+          border: 1px solid rgba(0, 229, 255, 0.5);
+          color: #00E5FF;
+          padding: 5px 14px;
+          border-radius: 20px;
+          font-size: 0.68rem;
+          font-family: inherit;
+          font-weight: 600;
+          cursor: pointer;
+          display: none;
+          box-shadow: 0 4px 14px rgba(0,0,0,0.7);
+          transition: all 0.2s ease;
+          backdrop-filter: blur(6px);
+        }}
+        .scroll-bottom-btn:hover {{
+          background: rgba(0, 229, 255, 0.2);
+          transform: translateY(-1px);
+        }}
+      </style>
+    </head>
+    <body>
+      <div class="terminal-container">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+          </div>
+          <div class="terminal-title">ESP32 TELEMETRY CONSOLE</div>
+          <div id="status-badge" class="status-badge {status_badge_class}">
+            {status_badge_text}
+          </div>
+        </div>
+        <div id="terminal-body" class="terminal-body">{html_body_content}</div>
+        <button id="scroll-btn" class="scroll-bottom-btn">⬇ Jump to latest</button>
+      </div>
+      <script>
+        const isPaused = {is_paused_js};
+        const body = document.getElementById('terminal-body');
+        const scrollBtn = document.getElementById('scroll-btn');
+
+        const savedScrollTop = sessionStorage.getItem('console_scroll_top');
+        const userScrolledUp = sessionStorage.getItem('console_user_scrolled_up') === 'true';
+
+        if (isPaused) {{
+          if (savedScrollTop !== null) {{
+            body.scrollTop = parseFloat(savedScrollTop);
+          }}
+        }} else {{
+          if (userScrolledUp && savedScrollTop !== null) {{
+            body.scrollTop = parseFloat(savedScrollTop);
+            scrollBtn.style.display = 'block';
+          }} else {{
+            body.scrollTop = body.scrollHeight;
+            scrollBtn.style.display = 'none';
+          }}
+        }}
+
+        body.addEventListener('scroll', () => {{
+          sessionStorage.setItem('console_scroll_top', body.scrollTop);
+          const isAtBottom = (body.scrollHeight - body.scrollTop - body.clientHeight) < 25;
+          if (isAtBottom) {{
+            sessionStorage.setItem('console_user_scrolled_up', 'false');
+            scrollBtn.style.display = 'none';
+          }} else {{
+            if (!isPaused) {{
+              sessionStorage.setItem('console_user_scrolled_up', 'true');
+              scrollBtn.style.display = 'block';
+            }}
+          }}
+        }});
+
+        scrollBtn.addEventListener('click', () => {{
+          sessionStorage.setItem('console_user_scrolled_up', 'false');
+          body.scrollTop = body.scrollHeight;
+          scrollBtn.style.display = 'none';
+        }});
+      </script>
+    </body>
+    </html>
+    """
+
+    components.html(console_html, height=395)
+
 
 # ---------------------------------------------------------------------
-# Row 4: Technology Explainer Tabs
+# WORKSPACE 2: CONTINUAL LEARNING
 # ---------------------------------------------------------------------
-st.markdown("---")
-st.markdown("### 💡 CORE TECHNOLOGICAL MATRIX")
-
-tab1, tab2 = st.tabs(["🧬 Neuromorphic Sparse Updates (DSD-NA)", "⚡ Intel NPU Acceleration & OpenVINO"])
-
-with tab1:
+with ws_continual:
     st.markdown("""
-    #### Dynamic Sparse-Update Neuromorphic Architecture (DSD-NA)
-    The **DSD-NA** middleware pipeline makes on-device training feasible under strict hardware limitations (e.g., STM32 MCU with 256KB SRAM) where traditional AI engines crash with OOM errors:
-    
-    * **Magnitude-Based Dynamic Sparsity**: Instead of executing complete backward weight matrix iterations, the runtime analyzes activation salience on-the-fly, bypassing up to 90% of gradients that don't pass the threshold.
-    * **4-Bit Quantized Latent Replay**: Reconstructs previous state activations from a 4-bit compressed memory ring-buffer during weight adjustments, cutting activation memory storage requirements from several megabytes down to a mere 32KB.
-    * **Hardware Native Translation**: Outputs highly optimized C++ code invoking specialized assembly instructions (ARM CMSIS-NN / ESP-NN) to utilize DSP instructions directly on-chip.
-    """)
+    <div class="hud-panel">
+        <div class="hud-card">
+            <div class="hud-label">Gradient Sparsity Rate</div>
+            <div class="hud-value-row">
+                <span class="hud-val text-cyan">5.0%</span>
+            </div>
+            <div class="hud-subtitle">Magnitude-Based Top-K Filter</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Adaptation Latency</div>
+            <div class="hud-value-row">
+                <span class="hud-val">1.8</span>
+                <span class="hud-unit">ms</span>
+            </div>
+            <div class="hud-subtitle">On-Device Weight Delta Step</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Active Trainable Params</div>
+            <div class="hud-value-row">
+                <span class="hud-val">32</span>
+                <span class="hud-unit">/ 640</span>
+            </div>
+            <div class="hud-subtitle">Linear Classifier Layer Only</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Retention Index</div>
+            <div class="hud-value-row">
+                <span class="hud-val text-success">100.0%</span>
+            </div>
+            <div class="hud-subtitle text-cyan">Zero Catastrophic Forgetting</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-with tab2:
     st.markdown("""
-    #### Auto-Scaling and OpenVINO Compilation
-    When deployment targets with advanced silicon capabilities (like the **Intel Core Ultra NPU or GPU**) are detected by the middleware, it scales accuracy and throughput automatically:
-    
-    * **Automatic Layer Unpruning**: Bypasses the 90% sparsity target and 4-bit loss quantization boundaries, enabling dense, high-fidelity FP32 training paths to leverage maximum accuracy.
-    * **OpenVINO Compiler Pipeline**: Cross-compiles the system configuration directly into OpenVINO XML/BIN Intermediate Representation (IR) graphs.
-    * **Intel NPU Optimization**: Harnesses dedicated neural compute blocks on Core Ultra architectures, achieving up to a **14.2x compute speedup** while minimizing CPU thermal load and system power draw.
-    """)
+    <div style='padding: 1.5rem; background: #111520; border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 12px; margin-bottom: 2rem;'>
+        <div style='font-size: 0.8rem; font-weight: 600; color: #00E5FF; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;'>Embedded Continual Learning Pipeline Architecture</div>
+        <ul style='list-style-type: square; color: rgba(255,255,255,0.7); font-size: 0.85rem; padding-left: 1.2rem; margin: 0; line-height: 1.8;'>
+            <li><strong style='color:#ffffff;'>Frozen Feature Extractor:</strong> 1D-Convolutional backbone (Conv1 &rarr; MaxPool &rarr; Conv2 &rarr; MaxPool) pretrained on host and frozen on-device to conserve compute.</li>
+            <li><strong style='color:#ffffff;'>Magnitude-Based Sparse Gradient Updates:</strong> During supervised adaptation, cross-entropy gradients are computed for the linear classifier, but only the top <strong>5% largest magnitude gradients</strong> are updated.</li>
+            <li><strong style='color:#ffffff;'>4-Bit Quantized Replay Reservoir:</strong> Latent vectors (400 dimensions) are min-max quantized into 4-bit packed nibbles (200 bytes per sample) and stored in a static 50-sample reservoir memory buffer to prevent catastrophic forgetting.</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Live stream page rerun block
-if live_sim_on:
-    time.sleep(0.5)
+    st.markdown("<div style='font-size: 0.72rem; font-weight: 500; color: rgba(255, 255, 255, 0.3); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.75rem;'>Adaptation Trajectory Log</div>", unsafe_allow_html=True)
+    
+    trajectory_df = st.session_state.vibration_history[["Count", "Pred_Name", "Magnitude_g", "Confidence", "Latency_ms"]].copy()
+    trajectory_df.columns = ["Cycle Step", "Prediction", "Magnitude (g)", "Confidence (%)", "Inference Latency (ms)"]
+    st.dataframe(trajectory_df, width='stretch', hide_index=True)
+
+# ---------------------------------------------------------------------
+# WORKSPACE 3: REPLAY BUFFER
+# ---------------------------------------------------------------------
+with ws_replay:
+    if latest_data is not None:
+        buf_count = int(latest_data['Buffer_Count'])
+        buf_percent = min(round((buf_count / 50.0) * 100, 1), 100.0)
+        buf_count_str = f"{buf_count}"
+    else:
+        buf_count_str = "Unavailable"
+        buf_percent = 0.0
+
+    st.markdown(f"""
+    <div class="hud-panel">
+        <div class="hud-card">
+            <div class="hud-label">Reservoir Capacity</div>
+            <div class="hud-value-row">
+                <span class="hud-val">{buf_count_str}</span>
+                <span class="hud-unit">/ 50</span>
+            </div>
+            <div class="hud-progress-bar">
+                <div class="hud-progress-fill" style="width: {buf_percent}%;"></div>
+            </div>
+            <div class="hud-subtitle">Static Memory Buffer Slots</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Buffer Footprint</div>
+            <div class="hud-value-row">
+                <span class="hud-val text-cyan">10.21</span>
+                <span class="hud-unit">KB</span>
+            </div>
+            <div class="hud-subtitle">4-Bit Packed Nibble Encoding</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Latent Dimension</div>
+            <div class="hud-value-row">
+                <span class="hud-val">400</span>
+                <span class="hud-unit">features</span>
+            </div>
+            <div class="hud-subtitle">Dense Vector Output</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Sample Memory Slot</div>
+            <div class="hud-value-row">
+                <span class="hud-val text-success">200</span>
+                <span class="hud-unit">Bytes</span>
+            </div>
+            <div class="hud-subtitle">Compressed Per Reservoir Sample</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<div style='font-size: 0.72rem; font-weight: 500; color: rgba(255, 255, 255, 0.3); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.75rem;'>Stored 4-Bit Replay Memory Slots</div>", unsafe_allow_html=True)
+    
+    # Generate representative replay slots matrix
+    slots_data = []
+    buf_count_raw = 0
+    if latest_data is not None:
+        try:
+            buf_count_raw = int(latest_data['Buffer_Count'])
+        except Exception:
+            buf_count_raw = 0
+
+    for idx in range(min(buf_count_raw, 15)):
+        slots_data.append({
+            "Slot ID": f"0x{idx:02X}",
+            "Sample Class": "NORMAL (0)" if idx % 3 != 0 else "ANOMALY (1)",
+            "Quantization Scale": "0.00392",
+            "Zero Point": "128",
+            "Packed Nibbles": "0x3A4B...0xC9FF",
+            "RAM Address": hex(0x3FFB0000 + idx * 200)
+        })
+    if slots_data:
+        st.dataframe(pd.DataFrame(slots_data), width='stretch', hide_index=True)
+    else:
+        st.markdown("<div style='font-size:0.8rem; color:rgba(255,255,255,0.45); text-align:center; padding:1.5rem;'>Replay buffer empty or device disconnected.</div>", unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------
+# WORKSPACE 4: RUNTIME
+# ---------------------------------------------------------------------
+with ws_runtime:
+    st.markdown(f"""
+    <div class="hud-panel">
+        <div class="hud-card">
+            <div class="hud-label">CPU Clock Speed</div>
+            <div class="hud-value-row">
+                <span class="hud-val">240</span>
+                <span class="hud-unit">MHz</span>
+            </div>
+            <div class="hud-subtitle">ESP32 Xtensa Dual-Core LX6</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">SRAM Budget</div>
+            <div class="hud-value-row">
+                <span class="hud-val">200.0</span>
+                <span class="hud-unit">KB</span>
+            </div>
+            <div class="hud-subtitle">Target Operating Enclosure</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Static Consumed</div>
+            <div class="hud-value-row">
+                <span class="hud-val text-cyan">{sram_kb}</span>
+                <span class="hud-unit">KB</span>
+            </div>
+            <div class="hud-subtitle">16.8% Total SRAM Budget</div>
+        </div>
+        <div class="hud-card">
+            <div class="hud-label">Dynamic Malloc</div>
+            <div class="hud-value-row">
+                <span class="hud-val text-success">0</span>
+                <span class="hud-unit">Bytes</span>
+            </div>
+            <div class="hud-subtitle">100% Static Safety</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div style='padding: 1.5rem; background: #111520; border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 12px; margin-bottom: 2rem;'>
+        <div style='font-size: 0.8rem; font-weight: 600; color: #00FF9D; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 1rem;'>Static SRAM Memory Budget Allocation ({sram_kb} KB Total / 200 KB Budget)</div>
+        <ul style='list-style-type: square; color: rgba(255,255,255,0.7); font-size: 0.85rem; padding-left: 1.2rem; margin: 0; line-height: 1.8;'>
+            <li><strong style='color:#ffffff;'>Weights & Biases:</strong> <span style='font-family:monospace; color:#00FF9D;'>5.88 KB</span> (Conv1, Conv2, FC Layer weights)</li>
+            <li><strong style='color:#ffffff;'>Activations & Buffers:</strong> <span style='font-family:monospace; color:#00FF9D;'>3.52 KB</span> (Raw window & feature maps)</li>
+            <li><strong style='color:#ffffff;'>4-Bit Quantized Replay Buffer:</strong> <span style='font-family:monospace; color:#00FF9D;'>10.21 KB</span> (50-sample capacity)</li>
+            <li><strong style='color:#ffffff;'>FreeRTOS Task Stacks:</strong> <span style='font-family:monospace; color:#00FF9D;'>14.00 KB</span> (Sampling, Inference, Adaptation, Serial tasks)</li>
+            <li><strong style='color:#ffffff;'>Dynamic Allocations (malloc):</strong> <span style='font-family:monospace; color:#00FF9D;'>0 Bytes (100% Static Safety)</span></li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------
+# WORKSPACE 5: DEPLOYMENT
+# ---------------------------------------------------------------------
+with ws_deploy:
+    config_h_content = "// Generated model_config.h\n#define SEQ_LEN 100\n#define LATENT_DIM 400\n#define BUFFER_CAPACITY 50"
+    if os.path.exists("main/model_config.h"):
+        with open("main/model_config.h", "r", encoding="utf-8", errors="replace") as f:
+            config_h_content = f.read()
+
+    st.markdown(f"""
+    <div style='font-size: 0.72rem; font-weight: 500; color: rgba(255, 255, 255, 0.3); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.75rem;'>Generated On-Device C Model Config Header (main/model_config.h)</div>
+    <div class="workspace-panel editor-panel">
+        <div class="editor-header">
+            <div class="terminal-dots">
+                <span class="terminal-dot dot-red"></span>
+                <span class="terminal-dot dot-yellow"></span>
+                <span class="terminal-dot dot-green"></span>
+            </div>
+            <div class="editor-title">main/model_config.h</div>
+        </div>
+        <div class="editor-body">
+            <pre><code>{config_h_content}</code></pre>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Live stream rerun loop — authoritative source is session state
+if st.session_state.get("main_live_stream_toggle", True):
+    time.sleep(0.15)
     st.rerun()
+

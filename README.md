@@ -1,188 +1,208 @@
-# TinyML Continual Learning Demo
+# TinyML Adaptive Edge Framework
 
-This project is a small, self-contained C implementation of a TinyML-style continual learning experiment.
-It simulates a lightweight classifier that is first trained on a baseline dataset and then adapted to a shifted
-"evolved" dataset while trying to avoid catastrophic forgetting.
+On-device continual learning for ESP32-class microcontrollers, applied to **vibration-based predictive maintenance**. A tiny CNN feature extractor stays frozen; a small classifier head keeps adapting on the chip while the machine's vibration behaviour drifts, using **sparse updates** and a **4-bit quantized latent replay buffer** so it does not forget what it already knew.
 
-The code is designed to run without external machine learning dependencies. Everything is implemented directly in
-C, using only the standard library and `libm` for math functions.
+The whole runtime is static-allocation C (zero heap allocations), runs as FreeRTOS tasks on the ESP32, and streams live telemetry to a Streamlit dashboard over USB serial.
 
-## What the project does
+> **Project history.** This repository started as a small C demo of continual learning on synthetic signals (kept in [`legacy/`](legacy/continual_learning_demo.c)), then grew into the ESP32 firmware, the host tooling and the dashboard. This README describes the merged state of all those lines of work.
 
-The program generates synthetic 1D sensor-like signals that resemble a simple heart-rate / PPG style waveform.
-It creates two versions of the data:
+---
 
-- Baseline data: the original distribution.
-- Evolved data: a slightly shifted distribution that simulates concept drift.
+## What problem it solves
 
-It then runs two training pipelines:
+A model trained once on a healthy machine degrades when conditions change: the sensor ages, the mount loosens, the temperature or load shifts (**concept drift**). Retraining in the cloud needs data transfer and connectivity. Fine-tuning naively on the device causes **catastrophic forgetting**, where the model learns the new condition and loses the old one.
 
-1. Standard training
-   - Trains the classifier normally with full updates.
-   - Adapts the same model to the evolved data without replay.
-   - Measures how much performance is retained on the original baseline data.
+This project keeps adaptation on the device and cheap enough for a microcontroller:
 
-2. Sparse training + quantized latent replay
-   - Trains a second model with sparse gradient updates.
-   - Stores old latent activations in a replay buffer using 4-bit-style quantization.
-   - Replays quantized old representations while learning the evolved data.
-   - Measures baseline retention and evolved-data performance.
+| Idea | How it is done here |
+|---|---|
+| Cheap training | Feature extractor is **frozen**; only the linear head is trained, so no conv gradients or activations are stored for training. |
+| Fewer updates | **Sparse head updates**: only the largest-magnitude gradients (about 5 percent) are applied. Four selection rules are implemented and switchable. |
+| No forgetting | **Latent replay**: old latent vectors (not raw signals) are stored, **4-bit quantized**, in a small reservoir and replayed during adaptation. |
+| Fits the chip | All memory is statically allocated and accounted for; the reported footprint includes gradient, selection and dequantization scratch. |
 
-At the end, the program prints a metrics report and a success message if the sparse + replay setup maintains
-strong accuracy on both datasets.
+---
 
-## Why this exists
-
-This is a learning and demonstration project, not a production ML system.
-It is meant to show how several TinyML-inspired ideas fit together:
-
-- Training on a constrained model.
-- Handling data drift.
-- Reducing update cost with sparse parameter updates.
-- Compressing replay memory with low-bit storage.
-- Comparing old-task retention against new-task learning.
-
-## Key ideas in the implementation
-
-### Synthetic data generation
-
-The program does not load a real dataset.
-Instead, it generates noisy sine-wave sequences with two labels:
-
-- `0`: one waveform pattern.
-- `1`: a slightly different waveform pattern.
-
-The evolved dataset adds extra distribution shift so the model has to adapt to changed conditions.
-
-### Model structure
-
-The model is a tiny neural network made of:
-
-- A frozen 1D convolutional feature extractor.
-- A trainable linear classifier on top of the extracted latent vector.
-
-The feature extractor is intentionally frozen to mimic a low-power embedded setting where only a small part of the
-model is adapted on-device.
-
-### Sparse updates
-
-When sparse mode is enabled, the classifier update only applies to the gradients with the largest magnitudes.
-This simulates a low-update regime where only a small percentage of parameters are changed each step.
-
-### Quantized latent replay
-
-Instead of replaying raw input samples, the program stores latent vectors produced by the feature extractor.
-These latents are quantized into 4-bit-style values in the range `0..15`, along with min/max values needed to
-restore them later.
-
-When replaying, the stored latent values are dequantized back into floats before being passed through the classifier.
-This keeps the replay buffer small while preserving the old information needed for continual learning.
-
-## Files
-
-- `main.c` - Complete program source.
-- `tinyml_c` - Native binary produced after compilation.
-
-## Build requirements
-
-You only need a C compiler and the math library.
-
-Recommended:
-
-- GCC or Clang
-- A Unix-like environment such as Linux or macOS
-
-## Build instructions
-
-From the project directory:
-
-```bash
-gcc -O2 -std=c11 main.c -lm -o tinyml_c
-```
-
-The `-lm` flag is required because the code uses math functions such as `sinf`, `sqrtf`, `logf`, and `cosf`.
-
-## Run instructions
-
-After building, run:
-
-```bash
-./tinyml_c
-```
-
-The program will:
-
-1. Generate synthetic baseline and evolved datasets.
-2. Train and evaluate the standard pipeline.
-3. Train and evaluate the sparse + replay pipeline.
-4. Print a final comparison report.
-
-## Example output
-
-The exact numbers will vary a little by random seed and data difficulty, but the output will look roughly like this:
+## System architecture
 
 ```text
-Generating Synthetic Data...
-
-==================================================
-Test Pipeline 1: STANDARD TRAINING (100% updates)
-==================================================
---- Training on Baseline Data (Standard) ---
-Epoch 1/10 | Loss: ... | Acc: ...%
-...
-Accuracy on Baseline Test Split: ...%
-
-==================================================
-Test Pipeline 2: SPARSE TRAINING (~5% updates) + QLR (100 sample capacity)
-==================================================
---- Training on Baseline Data (w/ sparsity & buffer fill) ---
-...
-
-==================================================
-Final Output Metrics Report
-==================================================
-...
++-----------------------+     +-----------------------+     +-----------------------+
+|  Host model spec &    | --> | Host Python codegen   | --> | Auto-generated C      |
+|  training             |     | & memory planner      |     | model_config.h        |
+| (tools/model_spec.json|     | (tools/codegen.py)    |     | weights.h             |
+|  train_vibration_...) |     | (memory_planner.py)   |     |                       |
++-----------------------+     +-----------------------+     +-----------+-----------+
+                                                                        |
+                                                                        v
++-----------------------+     +-----------------------+     +-----------+-----------+
+| Streamlit dashboard   | <-- | USB serial bridge     | <-- | ESP-IDF C runtime     |
+| & adaptation control  |     | JSON telemetry        |     | static FreeRTOS tasks |
+| (app.py)              |     | (serial_bridge.py)    |     | (main/main.c,         |
+|                       |     |                       |     |  main/tiny_cl.c)      |
++-----------------------+     +-----------------------+     +-----------------------+
 ```
 
-## Important implementation notes
+### On-device pipeline
 
-- The project does not use PyTorch, NumPy, or any other external ML library.
-- The replay buffer stores quantized latent vectors, not the original raw signals.
-- Only the classifier is updated during training; the feature extractor remains frozen.
-- The dataset is synthetic, so the reported metrics are experiment results, not real-world model performance.
-- The program is intentionally simple and meant for demonstration, testing, and learning.
+```text
+IMU (MPU6050 / ADXL345, I2C, 50 Hz)
+   -> window of 100 samples
+   -> per-window standardisation (zero mean, unit variance)
+   -> frozen Conv1D(1->8, k5) + pool -> Conv1D(8->16, k5) + pool
+   -> latent vector (400 values)
+   -> linear classifier head (2 classes: Normal / Anomaly)   <-- the only part that learns
+        ^                                   |
+        |  sparse update (top ~5% gradients)|
+        +--- 4-bit quantized latent replay reservoir (50 samples)
+```
 
-## How the 4-bit replay works
+### FreeRTOS tasks (all statically created)
 
-The replay buffer uses a simple min-max quantization scheme:
+| Task | Priority | Role |
+|---|---|---|
+| `imu_sampling` | 5 | Reads the IMU at 50 Hz into the window buffer |
+| `inference` | 4 | Runs feature extraction and prediction at 10 Hz, publishes latency and confidence |
+| `adaptation` | 3 | On a label command: stores the latent in the reservoir, applies the sparse head update, then a replay step |
+| `serial_io` | 2 | Emits JSON telemetry and parses label commands |
 
-1. Find the minimum and maximum value in a latent vector.
-2. Scale each latent value into an integer from `0` to `15`.
-3. Store those quantized values together with the min/max range.
-4. When replaying, convert the values back into floating-point numbers.
+---
 
-This is why the project is described as using "4-bit" replay.
-It is a compressed representation of old latent data, not a full integer-only model.
+## Key implementation details
 
-## Limitations
+- **Per-window standardisation** (`tiny_cl_standardise_window`): each window is normalised before the conv layers (population std, epsilon 1e-8). Host-trained weights must be trained with the same normalisation to transfer.
+- **Four head-update rules** (`TinyCLUpdateRule`, chosen at `tiny_cl_init`):
+  - `TINY_CL_UPDATE_DENSE`: update every weight.
+  - `TINY_CL_UPDATE_SORT`: top-k by a full comparison sort (baseline sparse rule, the firmware default).
+  - `TINY_CL_UPDATE_INTROSELECT`: top-k via quickselect partition, expected O(n).
+  - `TINY_CL_UPDATE_THRESHOLD`: running-threshold heuristic, single pass, no selection step.
+- **Quantized latent replay**: min-max 4-bit quantization of latent vectors (values 0 to 15 plus min and max per vector), dequantized when replayed. Replay can be toggled with `tiny_cl_set_replay_enabled`.
+- **Honest memory accounting**: `tiny_cl_get_stats` reports head, reservoir, activation, gradient and dequantization storage separately, plus flash (frozen weights) as a separate figure. An earlier revision omitted the gradient, selection and dequantization scratch and understated the true static footprint by about 2.5x.
+- **Static allocation**: no `malloc` in the runtime.
 
-This code is a simulation, not a benchmark-grade continual learning system.
+### Static memory (desktop simulation of the merged core)
 
-- It uses synthetic data.
-- It does not train a full end-to-end deep network.
-- The sparse update rule is a simplified magnitude-based heuristic.
-- The quantization is approximate and meant to demonstrate the idea of compressed replay.
+| Component | Bytes |
+|---|---|
+| Head parameters + adaptation state | 3,228 |
+| Replay reservoir (50 samples, 4-bit) | 10,472 |
+| Extractor activation scratch | 10,000 |
+| Gradient accumulator + selection scratch | 9,608 |
+| Dequantization staging | 1,600 |
+| **Total engine SRAM** | **34,908 (about 34.1 KB)** |
+| Frozen weights (flash, `.rodata`, not SRAM) | 6,024 |
 
-## Suggested next steps
+FreeRTOS task stacks (about 14 KB, from the earlier README) are in addition to the engine figure. Target budget in `tools/model_spec.json` is 200 KB SRAM.
 
-If you want to extend the project, useful improvements would be:
+---
 
-- Add a `Makefile`.
-- Add command-line options for seed, epochs, and buffer size.
-- Save metrics to a CSV file.
-- Add a real sensor dataset.
-- Compare more replay strategies.
+## Repository layout
 
-## License
+```text
+main/                    ESP-IDF firmware component
+  main.c                   FreeRTOS tasks, telemetry, label commands
+  tiny_cl.c / tiny_cl.h    Continual-learning engine (extractor, head, sparse update, replay, stats)
+  imu_driver.c / .h        MPU6050 / ADXL345 I2C driver
+  self_test_main.c         IMU wiring self-test entry point
+  model_config.h           Generated model constants
+  weights.h                Frozen extractor + head weights (see caveat below)
+tools/                   Host tooling
+  model_spec.json          Architecture and adaptation parameters
+  train_vibration_model.py Host training of the feature extractor
+  memory_planner.py        Static SRAM budget check
+  codegen.py               Generates model_config.h and weights.h from model_spec + weights.json
+  desktop_sim.c            Host C simulation harness (no hardware needed)
+app.py                   Streamlit dashboard (live telemetry, console, label buttons)
+serial_bridge.py         USB serial bridge between the ESP32 and the dashboard
+docs/vibration_demo_script.md   Step-by-step drift and adaptation demo
+legacy/continual_learning_demo.c  Original single-file C demo on synthetic PPG-like signals
+```
 
-No license has been added yet. Add one if you plan to share or publish the project.
+---
+
+## Getting started
+
+### 1. Desktop simulation (no hardware)
+
+```bash
+gcc -O2 -std=c11 -Wall tools/desktop_sim.c -lm -o tools/desktop_sim
+./tools/desktop_sim
+```
+
+Prints the memory breakdown, runs 100 streaming inference and adaptation cycles on synthetic windows and confirms there are no heap allocations. The accuracy it prints is on the simulator's own generated data and is a sanity check, not a benchmark.
+
+### 2. Hardware wiring
+
+```text
+ESP32                    MPU6050 / ADXL345
+3.3V          ------->   VCC
+GND           ------->   GND
+GPIO 21 (SDA) ------->   SDA
+GPIO 22 (SCL) ------->   SCL
+```
+
+### 3. IMU self-test
+
+Set `SRCS` in `main/CMakeLists.txt` to `"self_test_main.c" "imu_driver.c"`, then:
+
+```bash
+idf.py build
+idf.py -p COMx flash monitor
+```
+
+### 4. Full firmware
+
+Register `"main.c" "imu_driver.c" "tiny_cl.c"` in `main/CMakeLists.txt`, then:
+
+```bash
+idf.py build
+idf.py -p COMx flash monitor
+```
+
+### 5. Dashboard
+
+```bash
+streamlit run app.py
+```
+
+Select the ESP32 serial port in the sidebar and connect. Follow [`docs/vibration_demo_script.md`](docs/vibration_demo_script.md) to induce drift and trigger on-device adaptation.
+
+### Serial protocol
+
+The firmware prints one JSON line per update at 115200 baud, for example:
+
+```json
+{"type":"telemetry","count":120,"pred":1,"conf":0.973,"mag":1.21,"sparsity":0.05,"buffer":50,"static_ram_kb":33.6,"latency_ms":1.8}
+```
+
+Commands accepted on the same port: `{"cmd":"label","val":0|1}` or `LABEL:0` / `LABEL:1`.
+
+---
+
+## Research findings
+
+The accompanying study (13-page paper) benchmarked the four update rules over 10 random seeds under a recalibrated, realistic task (about 90 percent nominal accuracy, about 51 percent under drift). Summary of its conclusions:
+
+- On-device adaptation recovered roughly 20 percentage points under drift but stayed below the offline-trained ceiling.
+- Naive replay hurt retention in that setup.
+- Dense updates beat every sparse rule: conditional writes block vectorization and selection overhead cancels the theoretical savings.
+
+The paper and the benchmark scripts are not part of this repository, so these numbers are reported from that study rather than reproduced here.
+
+---
+
+## Known caveats
+
+- **Weights and the host training script.** The checked-in `main/weights.h` pairs with the per-window-standardised core and includes a trained classifier head. `tools/train_vibration_model.py` and `tools/weights.json` predate that standardisation step; regenerating `weights.h` with `tools/codegen.py` will produce weights that do not match the current firmware until the training script applies the same standardisation.
+- **Telemetry RAM field.** `main/main.c` still reports a hardcoded `static_ram_kb` of 33.6 and `app.py` displays that figure; the corrected engine total is about 34.1 KB plus task stacks. These should read from `tiny_cl_get_stats`.
+- **Firmware not compiled in CI.** The ESP-IDF build was not run when branches were merged; the desktop simulation and Python syntax were checked.
+- **Data.** The desktop simulator and the legacy demo use synthetic signals. The firmware itself has been run on a real ESP32 with a real IMU sensor.
+
+---
+
+## Legacy continual-learning demo
+
+`legacy/continual_learning_demo.c` is the original dependency-free C experiment: a frozen Conv1D extractor and trainable linear classifier on synthetic PPG-like waveforms, comparing standard training against sparse training with 4-bit latent replay.
+
+```bash
+gcc -O2 -std=c11 legacy/continual_learning_demo.c -lm -o tinyml_c && ./tinyml_c
+```
